@@ -23,8 +23,11 @@ class plots():
         ----------
         filepath: str
             The path of the jackknife file (.*jkf) to load.
-            
         """
+        
+        if filepath[-4:] != ".jkf":
+            raise IOError("Jackknife file not found at location specified.")
+            
         self.stats.load_file(filepath)
         with open(filepath,"rb") as f:
             dic = pkl.load(f)
@@ -35,7 +38,7 @@ class plots():
         self.data.load(dic)
         self.stats.data.load(dic)
         
-    def sort(self,item,shrink=False):
+    def sort(self,item):
         """Sort the spectra by specific antenna. Goes through the list of spectra
         pairs and puts whichever spectra has used the specified antenna into the 
         first slot. Output is exactly the same shape as input, but sorted.
@@ -129,7 +132,7 @@ class plots():
         
         n-=1
         if n < 0 or n >= self.data.n_jacks:
-            raise Exception("Jaccknife number outside of range. \
+            raise ValueError("Jaccknife number outside of range. \
                             Avail: 0-%i" %self.data.n_jacks)
         if fig == None:
             fig = plt.figure(figsize=(8,5))
@@ -176,7 +179,7 @@ class plots():
         
         n-=1
         if n < 0 or n >= self.data.n_jacks:
-            raise Exception("Jaccknife number outside of range. \
+            raise ValueError("Jaccknife number outside of range. \
                             Avail: 0-%i" %self.data.n_jacks)
             
         if fig == None:
@@ -267,6 +270,9 @@ class plots():
                                           self.data.errs,method="weightedsum")
             data = np.vstack(stds)
             ylims = (-5,5)
+        
+        else: 
+            raise NameError("Plot type not recognized")
                     
         if type(ybins) == int:
             ybins = np.linspace(ylims[0],ylims[1],ybins+1)
@@ -302,6 +308,8 @@ class plots():
         
         if plottype == "norm":
             ax.set_ylabel("Normalized Difference")
+        elif plottype == "raw":
+            ax.set_ylabel(r"P($\tau$")
             
         if returned:
             return hist

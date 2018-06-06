@@ -12,13 +12,62 @@ import pickle
 from utils import timestamp
 import time
 
+class jackknives():
+
+    def split_ants(self):
+
+            """
+            Splits available antenna into two groups randomly, and returns the UVPspec of each.
+
+            """
+            uvp = copy.deepcopy(self.uvp)
+
+            # Load all baselines in uvp
+            blns = [uvp.bl_to_antnums(bl) for bl in uvp.bl_array]
+            ants = np.unique(blns)
+
+            c = 0
+            minlen = 0
+            while minlen <= len(blns)//6 or minlen <= 3:
+                # Split antenna into two equal groups
+                grps = np.random.choice(ants,len(ants)//2*2,replace=False).reshape(2,-1)
+
+                # Find baselines for which both antenna are in a group
+                blg = [[],[]]
+                for bl in blns:
+                    if bl[0] in grps[0] and bl[1] in grps[0]:
+                        blg[0] += [bl]
+                    elif bl[0] in grps[1] and bl[1] in grps[1]:
+                        blg[1] += [bl]
+
+                # Find minimum baseline length
+                minlen = min([len(b) for b in blg])
+
+                # If fails to find sufficiently large group enough times, raise excption
+                c += 1
+                if c == 50:
+                    raise Exception("Not enough antenna provided")
+
+            blgroups = []
+            for b in blg:
+                inds = np.random.choice(range(len(b)),minlen,replace=False)
+                blgroups += [[uvp.antnums_to_bl(b[i]) for i in inds]]
+
+            # Split uvp by groups
+            uvpl = [uvp.select(bls=b,inplace=False) for b in blgroups]
+
+            self.n_pairs = minlen
+
+            return uvpl,[list(g) for g in grps]
+
 
 class jackknife():
+    
     def __init__(self):
-        self.__labels = { self.split_ants: "spl_ants" }
+        self.jackknives = jackknives()
+        self.__labels = { self.jackknives.split_ants: "spl_ants" }
         self.data_direc = "/lustre/aoc/projects/hera/H1C_IDR2/IDR2_1/"
         pass
-    
     
     def load_uvd(self, filepath, verbose=False):
         """Loads a UVD file to be used for jackknifing. This needs to be done in order for the
@@ -60,7 +109,8 @@ class jackknife():
                    calc_avspec=False,verbose=False):
         
         """
-        Splits available antenna into two groups, runs power spectrum analysis on both groups.
+        Splits available antenna into two groups using a specified method from hera_stats.jackknife.jackknives,
+        runs power spectrum analysis on both groups.
         
         Parameters
         ----------
@@ -118,8 +168,8 @@ class jackknife():
 
         """
         
-        if method == "split_ants" or method == self.split_ants:
-            function = self.split_ants
+        if method == "split_ants" or method == self.jackknives.split_ants:
+            function = self.jackknives.split_ants
         else:
             raise NameError("Function not found. Specify by string or jackknife class method")
         
@@ -150,7 +200,7 @@ class jackknife():
             spectra += [specs]
             errs += [err]
             grps += [grp]
-            n_pairs += [self.n_pairs]
+            n_pairs += [self.jackknives.n_pairs]
             
         tboot = time.time() - t
         t = time.time()
@@ -197,7 +247,6 @@ class jackknife():
 
                 
                 
-                
     def calc_uvp(self, spw_ranges, baseline=None,pols=("XX","XX"),
                                     beampath=None,taper='blackman-harris',use_ants=None):
         
@@ -228,9 +277,17 @@ class jackknife():
         
         """
         ants = self.uvd.get_ants()
+        if sum([b not in ants for b in baseline]) > 0 :
+            raise ValueError("Baseline not found in UVData file.")
         
         # If use_ants is not a list of objects, only use those specified
         if type(use_ants) != type(None):
+            
+            if sum([ua not in ants for ua in use_ants]) > 0:
+                raise ValueError("Antenna specified not found in data.")
+                
+            if sum([b not in use_ants for b in baseline]) > 0:
+                raise ValueError("Baseline not in list use_ants.")
             
             # Find the antenna that aren't being used
             notused = ~np.array([a in use_ants for a in ants])
@@ -265,6 +322,7 @@ class jackknife():
                        verbose=False)
         
         self.uvp = uvp
+        self.jackknives.uvp = uvp
         
             
     def find_files(self,direc,endstring):
@@ -281,58 +339,6 @@ class jackknife():
         
         return [direc + "/" + f for f in files]
 
-    
-    def split_ants(self):
-        
-        """
-        Splits available antenna into two groups randomly, and returns the UVPspec of each.
-            
-        """
-        
-        uvp = copy.deepcopy(self.uvp)
-        
-        # Load all baselines in uvp
-        blns = [uvp.bl_to_antnums(bl) for bl in uvp.bl_array]
-        ants = np.unique(blns)
-        
-        c = 0
-        minlen = 0
-        while minlen <= len(blns)//6 or minlen <= 3:
-            # Split antenna into two equal groups
-            grps = np.random.choice(ants,len(ants)//2*2,replace=False).reshape(2,-1)
-
-            # Find baselines for which both antenna are in a group
-            blg = [[],[]]
-            for bl in blns:
-                if bl[0] in grps[0] and bl[1] in grps[0]:
-                    blg[0] += [bl]
-                elif bl[0] in grps[1] and bl[1] in grps[1]:
-                    blg[1] += [bl]
-        
-            # Find minimum baseline length
-            minlen = min([len(b) for b in blg])
-            self.n_pairs = minlen
-            
-            # If fails to find sufficiently large group enough times, raise excption
-            c += 1
-            if c == 50:
-                raise Exception("Not enough antenna provided")
-        
-        # 
-        blgroups = []
-        for b in blg:
-            inds = np.random.choice(range(len(b)),minlen,replace=False)
-            blgroups += [[b[i] for i in inds]]
-                
-        # Construct baseline pairs
-        blpairs = [hp.pspecdata.construct_blpairs(b,
-                                                  exclude_auto_bls=True,
-                                                  exclude_permutations=True)[2] for b in blgroups]
-        
-        # Split uvp by groups
-        uvpl = [uvp.select(blpairs=b,inplace=False) for b in blpairs]
-        
-        return uvpl,[list(g) for g in grps]
     
     def bootstrap_errs_once(self, uvp, pol="xx", n_boots=100,return_all=False,imag=False,
                             bootstrap_times=True):
@@ -511,7 +517,7 @@ class jackknife():
         # Make sure both antenna are actually in the list of available antenna and positions
         if sum([bsl[i] in num_nd for i in [0,1]]) != 2:
             raise Exception("Antenna pair not found. Available antennas are: " +
-                            str(num_nd.tolist()))
+                            str(sorted(num_nd.tolist())))
         
         dic_nd = dict(zip(num_nd,pos_nd))
         

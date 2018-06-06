@@ -26,7 +26,11 @@ class jkf_stats():
             self.load_file(filepath)
     
     def load_file(self,filepath):
-         with open(filepath,"rb") as f:
+        
+        if filepath[-4:] != ".jkf":
+            raise IOError("Jackknife file not found at location specified.")
+            
+        with open(filepath,"rb") as f:
             dic = pkl.load(f)
             self.data.load(dic)  
             
