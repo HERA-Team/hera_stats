@@ -34,7 +34,6 @@ class plots():
             self.load_dic(dic)
 
     def load_dic(self,dic):
-
         self.data.load(dic)
         self.stats.data.load(dic)
 
@@ -53,7 +52,7 @@ class plots():
             Item to sort spectra by. Can be antenna or baseline.
         """
         self.data.validate()
-        if item not in np.array(self.data.grps).flatten():
+        if item not in np.array(self.data.grps).flatten() and item != None:
             raise AttributeError("Item not found in groups and not None.")
 
         sort,errs,grps = [],[],[]
@@ -68,7 +67,7 @@ class plots():
                 i1,i2 = 0,1
             elif item in gr[1]:
                 i1,i2 = 1,0
-            elif item == None:
+            else:
                 [i1,i2] = np.random.choice([0,1],2,replace=False)
 
             sort += [[sp[i1],sp[i2]]]
@@ -133,7 +132,7 @@ class plots():
         show_groups: boolean, optional
             Whether to label spectra arbitrarily or by the antenna used. Default: False.
 
-        savefile: str
+        savefile: str, optional
             If specified, will save the image to a file of this name. Default: None.
         """
         self.data.validate()
@@ -156,26 +155,25 @@ class plots():
 
         # Plot power spectrum
         spec = self.data.spectra[n]
-        p1 = self.__plot_spectrum(ax,self.data.dlys,spec[0])
-        p2 = self.__plot_spectrum(ax,self.data.dlys,spec[1])
+        p_l = [self.__plot_spectrum(ax,self.data.dlys,s) for s in spec]
 
         # Set ylims based on range of the spectrum
         mx,mn = np.max(np.array(spec)),np.min(np.array(spec))
         ax.set_ylim(mn*0.6,mx*5.)
 
         # Set other graph details
-        ax.legend([p1,p2],labels,fontsize=8,loc=1)
+        ax.legend(p_l,labels,fontsize=8,loc=1)
         ax.set_title("Power Spectrum for Jackknife %i/%i " %(n+1,self.data.n_jacks) + 
                      self.data.sortstring)
 
-    def plot_spectra_errs(self,n=1,fig=None,show_groups=False,savefile=None):
+    def plot_spectra_errs(self,n=1,fig=None,show_groups=False,savefile=None,plot_zscores=True):
         """
         Plots a pair of spectra, their errors, and normalized residuals.
 
         Parameters
         ----------
         n: int, optional
-            Index of the spectra pair to use. Default: 1.
+            Number (out of total) position of the spectra pair to use [1 - n_jacks]. Default: 1.
 
         fig: matplotlib figure, optional
             Where to plot the spectra. If None, creates figure. Default: None.
@@ -183,10 +181,12 @@ class plots():
         show_groups: boolean, optional
             Whether to label spectra arbitrarily or by the antenna used. Default: False.
 
-        savefile: str
+        savefile: str, optional
             If specified, will save the image to a file of this name. Default: None.
         """
         self.data.validate()
+        if self.data.jackpairs < 2:
+            plot_zscores = False
 
         n-=1
         if n < 0 or n >= self.data.n_jacks:
@@ -196,7 +196,10 @@ class plots():
         if fig == None:
             fig = plt.figure(figsize=(8,5))
 
-        ax = fig.add_axes([0.1,0.3,0.8,0.7])
+        if plot_zscores:
+            ax = fig.add_axes([0.1,0.3,0.8,0.7])
+        else:
+            ax = fig.add_subplot(111)
 
         # Choose labels appropriately
         if show_groups:
@@ -206,46 +209,46 @@ class plots():
 
         # Plot spectra with errorbars
         spec,er = self.data.spectra[n],self.data.errs[n]
-        p1 = self.__plot_spectrum(ax,self.data.dlys,spec[0],er[0])
-        p2 = self.__plot_spectrum(ax,self.data.dlys,spec[1],er[1])
+        p_l = [self.__plot_spectrum(ax,self.data.dlys,spec[i],er[i]) for i in range(len(spec))]
 
         # Set ylims based on range of power spectrum
         mx,mn = np.max(np.array(spec)),np.min(np.array(spec))
         ax.set_ylim(mn*0.6,mx*4.)
 
         # Set other details
-        ax.legend([p1,p2],labels,fontsize=8,loc=1)
+        ax.legend(p_l,labels,fontsize=8,loc=1)
         ax.set_title("Power Spectrum for Jackknife %i/%i " %(n+1,self.data.n_jacks) + 
                     self.data.sortstring)
 
-        # Create second plot for z scores
-        ax2 = fig.add_axes([0.1,0.1,0.8,0.2])
+        if plot_zscores:
+            # Create second plot for z scores
+            ax2 = fig.add_axes([0.1,0.1,0.8,0.2])
 
-        # plot z scores as scatterplot
-        stds = self.stats.standardize(self.data.spectra,self.data.errs)[n]
-        ax2.scatter(self.data.dlys,stds,marker="+",color="green")
-        xlims = ax.get_xlim() # Save axis limite
+            # plot z scores as scatterplot
+            stds = self.stats.standardize(self.data.spectra,self.data.errs)[n]
+            ax2.scatter(self.data.dlys,stds,marker="+",color="green")
+            xlims = ax.get_xlim() # Save axis limite
 
-        # Plot zero line 
-        ax2.hlines([0],[-10000],[10000],linestyles="--",alpha=0.6)
+            # Plot zero line 
+            ax2.hlines([0],[-10000],[10000],linestyles="--",alpha=0.6)
 
-        # Calculate yticks.
-        maxy = np.max(np.abs(stds))
-        ym = int(np.ceil(maxy))
-        if ym > 5:
-            ym = 5
-        tsp = int(ym//2.1)
-        if tsp < 1:
-            tsp = 1
-        yt = range(0,ym,tsp) + range(0,-ym,-tsp)[1:]
+            # Calculate yticks.
+            maxy = np.max(np.abs(stds))
+            ym = int(np.ceil(maxy))
+            if ym > 5:
+                ym = 5
+            tsp = int(ym//2.1)
+            if tsp < 1:
+                tsp = 1
+            yt = range(0,ym,tsp) + range(0,-ym,-tsp)[1:]
 
-        # Reinstate limits and set other paramters
-        ax2.set_ylim(-ym,ym)
-        ax2.set_xlim(xlims[0],xlims[1])
-        ax2.set_yticks(yt)
-        ax2.set_xlabel("Delay (ns)")
-        ax2.set_ylabel("Z-Score")
-        ax2.grid()
+            # Reinstate limits and set other paramters
+            ax2.set_ylim(-ym,ym)
+            ax2.set_xlim(xlims[0],xlims[1])
+            ax2.set_yticks(yt)
+            ax2.set_xlabel("Delay (ns)")
+            ax2.set_ylabel("Z-Score")
+            ax2.grid()
 
         # Save if necessary
         if savefile != None:
@@ -331,21 +334,25 @@ class plots():
         y = np.hstack(data)
 
         if display_stats:
+            # Plot average and stdev if requested
             avs = np.average(data,axis=0)
             stdevs = np.std(data,axis=0)
-            ax.plot(self.data.dlys,avs,c="black",lw=2)
-            ax.plot(self.data.dlys,avs+stdevs,c="red",ls="--",lw=2)
+            av, = ax.plot(self.data.dlys,avs,c="black",lw=2)
+            sigma, = ax.plot(self.data.dlys,avs+stdevs,c="red",ls="--",lw=2)
             ax.plot(self.data.dlys,avs-stdevs,c="red",ls="--",lw=2)
+            ax.legend([av,sigma],["Average","1-Sigma"],loc=1)
             ax.set_ylim(min(ybins),max(ybins))
 
-        # Plot histogram
-        hist = np.histogram2d(x,y,bins=[xbins,ybins])
+        # Calculate histogram
+        hist,xpts,ypts = np.histogram2d(x,y,bins=[xbins,ybins])
+        
         if normalize == True:
-            hist[0] /= len(data)
+            hist /= len(data)
         if vmax == None:
-            vmax = np.max(hist[0])/2
+            vmax = np.max(hist)/2
 
-        c = ax.pcolor(hist[1],hist[2],hist[0].T,vmax=vmax)
+        # Plot hist
+        c = ax.pcolor(xpts,ypts,hist.T,vmax=vmax)
         plt.colorbar(c,ax=ax)
 
         # Set labels
@@ -372,10 +379,10 @@ class plots():
 
         Parameters
         ----------
-        ax: matplotlib axis
+        ax: matplotlib axis, optional
             The axis on which to plot the ks test. Default: None.
 
-        norm: len-2 tuple
+        norm: len-2 tuple, optional
             (Average, Standard Deviation) of null hypothesis gaussian. Default: (0,1).
 
         method: string, optional
@@ -388,8 +395,10 @@ class plots():
             fig = plt.figure(figsize=(8,5))
             ax = fig.add_subplot(111)
 
+        # Get ks information
         ks,pvals = self.stats.kstest(norm=norm,method=method,asspec=True)
 
+        # Plot it
         p2, = ax.plot(self.data.dlys,pvals)
         p1, = ax.plot(self.data.dlys,ks)  
 
@@ -429,12 +438,15 @@ class plots():
             fig = plt.figure(figsize=(8,5))
             ax = fig.add_subplot(111)
 
+        # Get anderson statistics
         stat,crit = self.stats.anderson(True,method=method)
 
+        # Plot them
         p1 = ax.plot(self.data.dlys,stat)
         lp = ax.plot(self.data.dlys,crit)[::-1]
         sigs = ["1%","2.5%","5%","10%","15%"]
 
+        # Plot significance and failure info
         ax.legend(p1+lp,["Stat"]+sigs,loc=1)
         fails = [sum(np.array(stat) > c) for c in crit[0]]
         [ax.text(-5000,crit[0][i]+0.02,"%.1f"%fails[i]+"%") for i in range(5)]
@@ -450,7 +462,7 @@ class plots():
 
         Parameters
         ----------
-        ax: matplotlib axis
+        ax: matplotlib axis, optional
             Axis on which to plot average and stdev. Default: None.
 
         method: string, optional
@@ -463,8 +475,10 @@ class plots():
             fig = plt.figure(figsize=(8,5))
             ax = fig.add_subplot(111)
 
+        # Get average and stdev
         av,std = self.stats.av_std(method=method)
 
+        # plot it
         p1, = ax.plot(self.data.dlys,av)
         p2, = ax.plot(self.data.dlys,std)
 

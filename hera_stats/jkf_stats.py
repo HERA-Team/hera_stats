@@ -7,24 +7,22 @@ from scipy import stats as spstats
 import utils
 
 class jkf_stats():
-    """
-    Class for analyzing jackknife data.
 
-    Parameters
-    ----------
-    filepath: string
-        Filepath of the jackknife data file (.jkn) outputted by 
-        hera_stats.jackknife methods.
-    """
-    
-    
     def __init__(self,filepath=None):
-        
+        """
+        Class for analyzing jackknife data.
+
+        Parameters
+        ----------
+        filepath: string
+            Filepath of the jackknife data file (.jkn) outputted by 
+            hera_stats.jackknife methods.
+        """
         self.data = utils.jkfdata()
-       
+
         if filepath != None:
             self.load_file(filepath)
-    
+
     def load_file(self,filepath):
         """
         Loads a jackknife file (*.jkf) to the jkf_data object
@@ -42,29 +40,35 @@ class jkf_stats():
             self.data.load(dic)  
 
     def standardize(self,spectra,errs,method="varsum"):
+        """
+        Calculates the z scores for a list of split spectra and their errors.
 
-        """Calculates the z scores for a list of split spectra and their errors.
-        
         Parameters
         ----------
         spectra: list (n_jacks x 2 x n_dlys)
             A list of pairs of spectra, to be used to calculate z scores.
-        
+
         errs: list (n_jacks x 2 x n_dlys)
             List of pairs of errors corresponding to the above spectra
         
         method: string, optional
             Method used to calculate z-scores. 
             Options: ["varsum","weighted"]. Default: varsum.
-            
+
         Returns
         -------
         zs: list
             Returns zscores for every spectrum pair given.
         """
+        self.data.validate()
+
         if np.array(spectra).shape != np.array(errs).shape:
             raise AttributeError("Spectra pair list and corresponding errors must be \
                                  the same shape")
+
+        if self.data.jackpairs < 2:
+            raise AttributeError("Standardization failed because jackknife method not create multiple \
+                                  spectra.")
 
         zs = []
         for i,spec in enumerate(spectra):
@@ -80,9 +84,12 @@ class jkf_stats():
                 av,unc = self.weighted_sum(spec,err)
                 z = (spec[0]-spec[1])/(np.sqrt(2)*unc)
 
+            else:
+                raise NameError("Z-score calculation method not recognized")
+
             zs += [z]
 
-        return zs  
+        return zs
 
     def weighted_sum(self,spectra,errs):
         """
