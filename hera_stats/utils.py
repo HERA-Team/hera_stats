@@ -41,6 +41,10 @@ class jkfdata():
         
         self.loaded = True
         
+    def validate(self):
+        if not self.loaded:
+            raise AttributeError("No data loaded. Run load function")
+        
     def __repr__(self):
         
         string = "<hera_stats.utils.jkndata instance at %s>" %hex(id(self))

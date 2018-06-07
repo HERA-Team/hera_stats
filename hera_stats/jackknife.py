@@ -13,11 +13,21 @@ from utils import timestamp
 import time
 
 class jackknives():
+    
+    """
+    Class for writing and using jackknives. Class variable is uvp, which each jackknife
+    should use and output a pair of uvps, one for each jacknife. Jackknives should
+    also return a variable that defines the 
+    """
 
+    def __init__(self):
+        self.uvp = None
+        
     def split_ants(self):
 
             """
-            Splits available antenna into two groups randomly, and returns the UVPspec of each.
+            Splits available antenna into two groups randomly, and returns the UVPspec 
+            of each.
 
             """
             uvp = copy.deepcopy(self.uvp)
@@ -228,18 +238,18 @@ class jackknife():
                     "\nBootstrapping: %i min, %.1f sec" % secmin(tboot) +
                     "\nAv. Boots: %i min, %.1f sec" % secmin(tav) +
                     "\nTotal: %i min, %.1f sec" % secmin(ttot))
-            
-        if returned:
-            return dic
-        
+
         if os.path.exists("./data") == False:
             os.mkdir("./data")
-        
+
         # Make filename
         outname = self.__labels[function] + ".Nj%i." %n_jacks + timestamp() + ".jkf"
         if savename != None:
             outname = savename + "." + outname
-        
+
+        if returned:
+            return dic
+
         # Write
         with open("./data/" + outname, "wb") as f:
             pickle.dump(dic, f, pickle.HIGHEST_PROTOCOL)
