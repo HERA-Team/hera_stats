@@ -23,23 +23,26 @@ class Test_Plots():
         nt.assert_is_instance(pl.stats, hs.jkf_stats)
         nt.assert_is_instance(pl.data, hs.utils.jkfdata)
 
+        nt.assert_raises(AttributeError,pl.sort,100)
+
     def test_plots(self):
 
         f = plt.figure()
-        ax = f.add_subplot(111)
+        ax = f.add_subplot(111,label="h")
+        
         pl = self.pl
 
         pl.plot_spectra(fig=f)
-        pl.plot_spectra(fig=f,show_groups=True)
+        pl.plot_spectra(fig=f,show_groups=False)
         nt.assert_raises(ValueError,pl.plot_spectra,100,fig=f)
 
         pl.plot_spectra_errs(fig=f)
-        pl.plot_spectra_errs(fig=f,show_groups=True)
+        pl.plot_spectra_errs(fig=f,show_groups=False)
         nt.assert_raises(ValueError,pl.plot_spectra_errs,100,fig=f)
         f.clear()
 
         for mode in ["varsum","weightedsum","raw","norm"]:
-            pl.hist_2d(ax=ax,plottype = mode)
+            pl.hist_2d(ax=ax,plottype = mode,display_stats=False)
             ax.clear()
 
         nt.assert_raises(NameError, pl.hist_2d, "nothing")
@@ -61,9 +64,26 @@ class Test_Plots():
         nt.assert_raises(ValueError,pl.plot_spectra_errs,100,fig=f)
 
         for mode in ["varsum","weightedsum","raw","norm"]:
-            pl.hist_2d(ax=ax,plottype = mode)
+            pl.hist_2d(ax=ax,plottype = mode, normalize=True,vmax=0.2)
 
         nt.assert_raises(NameError, pl.hist_2d, "nothing")
         pl.plot_kstest(ax=ax)
         pl.plot_anderson(ax=ax)
         pl.plot_av_std(ax=ax)
+
+
+class Test_Stats():
+    def setUp(self):
+        st = hs.jkf_stats()
+
+        self.filepath = "./hera_stats/data/gauss.spl_ants.Nj40.2018-06-07.04_50_54.jkf"
+        st.load_file("./hera_stats/data/gauss.spl_ants.Nj40.2018-06-07.04_50_54.jkf")
+
+    def test_stats(self):
+        st = hs.jkf_stats()
+
+        print st.data
+        st.load_file("./hera_stats/data/gauss.spl_ants.Nj40.2018-06-07.04_50_54.jkf")
+        print st.data
+
+
