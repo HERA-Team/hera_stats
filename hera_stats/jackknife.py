@@ -295,6 +295,9 @@ class jackknife():
         combine: boolean, optional
             If False, keeps UVData files separate, so jackknife split_files can be run. Default: True.
 
+        use_ants: list or NoneType, optional
+            If provided, uses the antenna listed. Can shorten calculation times. Default: None.
+
         verbose: boolean, optional
             To print current actions and stopwatch. Default: False.
         """
@@ -327,7 +330,7 @@ class jackknife():
         self.__loadtime += time.time()-t
 
     def jackknife(self, jkf_func, spw_ranges, beampath, baseline=None, pols=("XX","XX"),
-                  taper='blackman-harris',use_ants=None,savename=None,n_boots=100,imag=False,
+                  taper='blackman-harris',savename=None,n_boots=100,imag=False,
                   bootstrap_times=True,returned=False,verbose=False,**kwargs):
         """
         Splits available antenna into two groups using a specified method from hera_stats.jackknife.jackknives,
@@ -337,9 +340,6 @@ class jackknife():
         ----------
         jkf_func: hera_stats.jackknives method
             The function to use to jackknife. All options are stored in hera_stats.jackknife.jackknives.
-
-        n_jacks: int
-            The amount of times to run the jackknife
 
         spw_ranges: list of tuples
             Spectral windows used to calculate power spectrum.
@@ -357,10 +357,6 @@ class jackknife():
         taper: str, optional
             The taper to pass to the pspec calculation. Default: 'blackman-harris'.
 
-        use_ants: list, optional
-            List of antenna to use in the calculation. If None, all available antenna are used.
-            Default: None.
-
         savename: string, optional
             Optional string that will be placed at the beginning of the .jkf file. Default: None.
 
@@ -371,9 +367,8 @@ class jackknife():
             Whether to return the imaginary component of the power spectrum instead of the real. 
             Default: False
 
-        calc_avspec: boolean, optional
-            If true, also calculates the power spectrum of all data combined (i.e. before jackknife)
-            Default: False
+        bootstrap_times: boolean, optional
+            If true, bootstraps over times. If false, averages over them before bootstrapping.
 
         returned: boolean, optional
             If true, returns a dictionary with the jackknife data in stead of saving to a file
@@ -397,7 +392,7 @@ class jackknife():
 
         # Calculate UVPspecData 
         self.calc_uvp(spw_ranges, baseline=baseline,pols=pols,
-                                    beampath=beampath,taper=taper,use_ants=use_ants)
+                                    beampath=beampath,taper=taper)
 
         # Run jackknife splitting
         uvpl,grps,n_pairs_l = jkf_func(**kwargs)
@@ -437,7 +432,7 @@ class jackknife():
             if verbose: print "Saving to: '%s'" %outname
 
     def calc_uvp(self, spw_ranges, baseline=None,pols=("XX","XX"),
-                                    beampath=None,taper='blackman-harris',use_ants=None):
+                                    beampath=None,taper='blackman-harris'):
         """
         Calculates UVPspecData object using UVData loaded in load_uvd()
 
@@ -458,10 +453,6 @@ class jackknife():
 
         taper: str, optional
             The taper to pass to the pspec calculation. Default: 'blackman-harris'.
-
-        use_ants: list, optional
-            List of antenna to use in the calculation. If None, all available antenna are used.
-            Default: None.
         """
         t = time.time()
 
@@ -471,30 +462,6 @@ class jackknife():
             hbl, nfi = self.hasants(baseline)
             if False in hbl:
                 raise AttributeError("Baseline antennae not found in the following files: " + str(nfi))
-
-        # If use_ants is not a list of objects, only use those specified
-        if type(use_ants) != type(None):
-
-            ha, nf = self.hasants(use_ants)
-            if False in ha:
-                raise ValueError("Antenna in 'use_ants' not found in these files: " + str(nf))
-
-            if baseline != None:
-                if sum([b not in use_ants for b in baseline]) > 0:
-                    raise ValueError("Baseline not in list use_ants.")
-
-            # Find the antenna that aren't being used
-            notused = ~np.array([a in use_ants for a in ants])
-            print np.array([a in use_ants for a in ants])
-
-            # Show user which are omitted
-            print ("Selecting antenna numbers: " + str(sorted(use_ants)) + 
-                   "\nThe following antenna have data and" +
-                  "will be omitted: " + str(sorted(ants[notused])))
-
-            # Modify UVData object to exclude those antenna
-            [u.select(antenna_nums=use_ants) for u in self.uvd]
-            ants = use_ants
 
         self.validate()
 
@@ -543,6 +510,14 @@ class jackknife():
 
         return_all: boolean
             Test parameter, returns every bootstrapped spectrum.
+
+        imag: boolean, optional
+            Whether to return the imaginary component of the power spectrum instead of the real. 
+            Default: False
+
+        bootstrap_times: boolean, optional
+            If true, generates errors using time axis as well. Othewise, averages over time
+            axis before bootstrapping errors.
 
         Returns:
         -------
@@ -626,6 +601,10 @@ class jackknife():
 
         imag: boolean, optional
             If true, returns the imaginary component of the spectra instead of the real
+
+        bootstrap_times: boolean, optional
+            If true, generates errors using time axis as well. Othewise, averages over time
+            axis before bootstrapping errors.
 
         Returns:
         -------
