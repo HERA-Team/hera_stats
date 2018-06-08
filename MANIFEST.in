@@ -1,4 +1,4 @@
 include *.md
 include LICENSE
-include hera_pspec/VERSION
-include hera_pspec/GIT_INFO
+include hera_stats/VERSION
+include hera_stats/GIT_INFO
