@@ -153,6 +153,13 @@ class plots():
         Tests the items within each group to see which fail the kstest badly and which do not.
         
         Parameters
+        ----------
+        tolerance: string, optional
+            The strictness of your test. Levels are preset. Options: "lenient", "normal", "strict".
+            Default: "normal"
+
+        verbose: boolean, optional
+            If True, prints more information about operations.
         """
         if tolerance == "normal":
             tol = 0.4
@@ -382,6 +389,10 @@ class plots():
             If set, sets the value for the maximum color. Useful if comparing 
             data sets. Default: None.
 
+        normalize: boolean, optional
+            If true, normalizes along the vertical axis, so that the sum of all values in a single
+            delay bin is 1. Default: False
+
         returned: boolean, optional
             If true, returns the histogram as well as plotting it. Default: False.
         """
@@ -395,20 +406,17 @@ class plots():
             # Plot zscores using sum of variances 
             data = self.stats.standardize(self.data.spectra,self.data.errs)
             ylims = (-5,5)
-
         elif plottype == "raw":
             # Plot raw spectra, combine jackknife pairs
             data = np.vstack([np.vstack(sp) for sp in self.data.spectra])
             ylims = (np.log10(np.min(self.data.spectra)),
                      np.log10(np.max(self.data.spectra)))
             ax.set_yscale("log")
-
         elif plottype == "norm":
             # Plot normed difference, that is, spectra devided by average
             allspecs = np.vstack(self.data.spectra)
             data = allspecs/np.average(allspecs,axis=0)
             ylims = (np.min(data),np.max(data))
-
         elif plottype == "weightedsum":
             # Plot zscores using sum of variances method
             stds = self.stats.standardize(self.data.spectra,
@@ -504,6 +512,7 @@ class plots():
 
         ax.legend([p1,p2],["ks-stat","p-val"])
         ax.set_xlabel("Delay (ns)")
+        ax.set_ylabel("Statistics")
         ax.set_title("Kolmogorov-Smirnov Test by Delay Bin " + self.data.sortstring)
         ax.set_ylim(0,1)
         ax.grid(True)
@@ -552,6 +561,7 @@ class plots():
         [ax.text(-5000,crit[0][i]+0.02,"%.1f"%fails[i]+"%") for i in range(5)]
 
         ax.set_xlabel("Delay (ns)")
+        ax.set_ylabel("Statistics")
         ax.set_title("Anderson Darling Test by Delay Bin " + self.data.sortstring)
         ax.set_ylim(0,1.15)
         ax.grid(True)
@@ -584,5 +594,6 @@ class plots():
         ax.legend([p1,p2],["Avg","Stdev"])
         ax.set_title("Standard Deviation and Average " + self.data.sortstring)
         ax.set_xlabel("Delay (ns)")
+        ax.set_ylabel("Z-Score")
         ax.set_ylim(-1,3)
         ax.grid(True)
