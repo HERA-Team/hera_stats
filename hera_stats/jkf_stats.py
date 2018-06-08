@@ -50,7 +50,7 @@ class jkf_stats():
 
         errs: list (n_jacks x 2 x n_dlys)
             List of pairs of errors corresponding to the above spectra
-        
+
         method: string, optional
             Method used to calculate z-scores. 
             Options: ["varsum","weighted"]. Default: varsum.
@@ -65,7 +65,6 @@ class jkf_stats():
         if np.array(spectra).shape != np.array(errs).shape:
             raise AttributeError("Spectra pair list and corresponding errors must be \
                                  the same shape")
-
         if self.data.jackpairs < 2:
             raise AttributeError("Standardization failed because jackknife method not create multiple \
                                   spectra.")
@@ -83,7 +82,6 @@ class jkf_stats():
             elif method == "weightedsum":
                 av,unc = self.weighted_sum(spec,err)
                 z = (spec[0]-spec[1])/(np.sqrt(2)*unc)
-
             else:
                 raise NameError("Z-score calculation method not recognized")
 
@@ -112,7 +110,6 @@ class jkf_stats():
         stdev: list
             The standard deviations for each delay mode.
         """
-
         spectra = np.array(spectra)
         errs = np.array(errs)
 

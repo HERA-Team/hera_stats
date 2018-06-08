@@ -15,6 +15,7 @@ class plots():
         self.data = utils.jkfdata()
         self.stats = jkf_stats()
         self.data.sortstring = ""
+        self.data.sortitem = None
 
     def load_file(self,filepath):
         """Load jackknife file.
@@ -24,7 +25,6 @@ class plots():
         filepath: str
             The path of the jackknife file (.*jkf) to load.
         """
-
         if filepath[-4:] != ".jkf":
             raise IOError("Jackknife file not found at location specified.")
 
@@ -34,6 +34,14 @@ class plots():
             self.load_dic(dic)
 
     def load_dic(self,dic):
+        """
+        Loads a dictionary of jackknife data.
+        
+        Parameters
+        ----------
+        dic: dictionary
+            Dictionary outputted by jackknife.
+        """
         self.data.load(dic)
         self.stats.data.load(dic)
 
@@ -52,17 +60,21 @@ class plots():
             Item to sort spectra by. Can be antenna or baseline.
         """
         self.data.validate()
+
+        # Sanity checks
         if item not in np.array(self.data.grps).flatten() and item != None:
             raise AttributeError("Item not found in groups and not None.")
+        if type(self.data.grps[0][0]) == str:
+            raise AttributeError("Cannot sort spectra if grouped by files.")
 
         sort,errs,grps = [],[],[]
         for i in range(self.data.n_jacks):
+            # Get jackknife data 
             gr = self.data.grps[i]
             sp = self.data.spectra[i]
             er = self.data.errs[i]
 
-            # Check if item is in either of the current groups. If not, randomly order
-            # the spectra
+            # Check if item is in either of the current groups. If not, randomly order spectra
             if item in gr[0]:
                 i1,i2 = 0,1
             elif item in gr[1]:
@@ -74,15 +86,102 @@ class plots():
             errs += [[er[i1],er[i2]]]
             grps += [[gr[i1],gr[i2]]]
 
+        # Set sortstring for plots to use
         if item != None:
             self.data.sortstring = "(Sorted by Item: %s)" %str(item)
+            self.data.sortitem = item
         else:
             self.data.sortstring = ""
+            self.data.sortitem = None
 
+        # Save things
         self.data.spectra = sort
         self.data.errs = errs
         self.data.grps = grps
         self.stats.data = self.data
+
+    def find_outliers(self,tolerance="normal",verbose=False):
+        """
+        Checks for outliers. Does a signifance level failure check for jackknife pairs. 
+        standardizes the jackknife data, then rejects spectra if it fails the test.
+
+        This test is basic, but can weed out bad spectra with ease. For each siginicance level, it counts
+        the number of points where the zscore exceeds this level. For a normal distribution, one would expect
+        the 1-sigma, 2-sigma, and 3-sigma fail fractions to be [0.317, 0.455, 0.0027]. Thus, distributions that 
+        are highly nongaussian will greatly exceed these fail fractions.
+
+        Parameters
+        ----------
+        tolerance: string
+            The tolerance level, predetermined but still changeable. Options: "lenient","normal","strict".
+            Default: "normal".
+
+        verbose: boolean
+            If true, prints out test results.
+
+        Returns
+        -------
+        outliers: list
+            List of jackknife numbers that are outliers. Note that jackknife numbers are different format than
+            spectrum indices, greater by 1.
+        """
+        zs = self.stats.standardize(self.data.spectra,self.data.errs)
+
+        if verbose: print "Looking for Outliers..."
+        # Set tolerances
+        if tolerance == "normal":
+            tols = [0.8,0.3,0.2]
+        elif tolerance == "strict":
+            tols = [0.6,0.2,0.1]
+        elif tolerance == "lenient":
+            tols = [0.9,0.5,0.4]
+        outl = []
+        for i,z in enumerate(zs):
+            # Fraction of z scores that are above significance level:
+            sig = [float(sum(np.abs(z) > lev))/len(z) for lev in [1,2,3]]
+
+            # True if failure fraction exceeds tolerance
+            failed = np.array(sig) > np.array(tols)
+            if sum(failed) > 0:
+                if verbose:
+                    print "%i: \t%r \t%r"%(i+1,sig,list(failed))
+                outl += [i+1]
+        return outl
+
+    def find_bad_items(self,tolerance="normal",verbose=False):
+        """
+        Tests the items within each group to see which fail the kstest badly and which do not.
+        
+        Parameters
+        """
+        if tolerance == "normal":
+            tol = 0.4
+        elif tolerance == "strict":
+            tol = 0.1
+        elif tolerance == "lenient":
+            tol = 0.7
+        else:
+            raise NameError("Tolerance string not recognized. Options: \"lenient\",\"normal\",\"strict\"")
+
+        if verbose: print("Looking for bad items, tolerance: %.2f"%tol)
+
+        # Save last sorted item so sort can reset the order later
+        saveitem = self.data.sortitem
+        items = utils.unique_items(self.data.grps)
+        fails = []
+        for item in items:
+            # Sort spectra by items, run kstest
+            self.sort(item)
+            failfrac = self.stats.kstest()
+
+            if failfrac >= tol:
+                # If failure, save to list
+                if verbose: print("%r\t%.2f"%(item,failfrac))
+                fails += [item]
+
+        # Return spectra to original order and return
+        self.sort(saveitem)
+        return fails
 
     def __plot_spectrum(self,ax,dlys,spectrum,errs=None):
         """
@@ -104,11 +203,13 @@ class plots():
         """
         self.data.validate()
 
+        # If errors are specified, plot those too
         if type(errs) == type(None):
             p, = ax.plot(dlys,spectrum)
         else:
             p = ax.errorbar(dlys,spectrum,errs)
 
+        # Set other parameters
         ax.set_yscale("log")
         ax.set_ylabel(r"P($\tau$)")
         ax.set_xlabel("Delay (ns)")
@@ -149,7 +250,10 @@ class plots():
 
         # Use labels of groups 
         if show_groups:
-            labels=[str(sorted(g)) for g in self.data.grps[n]]
+            if type(self.data.grps[0][0]) == list:
+                labels=[str(sorted(g)) for g in self.data.grps[n]]
+            else:
+                labels = [g for g in self.data.grps[n]]
         else:
             labels=["Antenna Group 1", "Antenna Group 2"]
 
@@ -166,7 +270,7 @@ class plots():
         ax.set_title("Power Spectrum for Jackknife %i/%i " %(n+1,self.data.n_jacks) + 
                      self.data.sortstring)
 
-    def plot_spectra_errs(self,n=1,fig=None,show_groups=False,savefile=None,plot_zscores=True):
+    def plot_spectra_errs(self,n=1,fig=None,show_groups=False,savefile=None,plot_zscores=True,zlim=5):
         """
         Plots a pair of spectra, their errors, and normalized residuals.
 
@@ -203,7 +307,10 @@ class plots():
 
         # Choose labels appropriately
         if show_groups:
-            labels=[str(sorted(g)) for g in self.data.grps[n]]
+            if type(self.data.grps[0][0]) == list:
+                labels=[str(sorted(g)) for g in self.data.grps[n]]
+            else:
+                labels = [g for g in self.data.grps[n]]
         else:
             labels=["Antenna Group 1", "Antenna Group 2"]
 
@@ -233,19 +340,13 @@ class plots():
             ax2.hlines([0],[-10000],[10000],linestyles="--",alpha=0.6)
 
             # Calculate yticks.
-            maxy = np.max(np.abs(stds))
-            ym = int(np.ceil(maxy))
-            if ym > 5:
-                ym = 5
-            tsp = int(ym//2.1)
-            if tsp < 1:
-                tsp = 1
-            yt = range(0,ym,tsp) + range(0,-ym,-tsp)[1:]
+            zmt = zlim//2*2
+            ticks = range(-zmt,zmt+1,2)
 
             # Reinstate limits and set other paramters
-            ax2.set_ylim(-ym,ym)
+            ax2.set_ylim(-zlim,zlim)
             ax2.set_xlim(xlims[0],xlims[1])
-            ax2.set_yticks(yt)
+            ax2.set_yticks(ticks)
             ax2.set_xlabel("Delay (ns)")
             ax2.set_ylabel("Z-Score")
             ax2.grid()
@@ -314,7 +415,6 @@ class plots():
                                           self.data.errs,method="weightedsum")
             data = np.vstack(stds)
             ylims = (-5,5)
-
         else: 
             # Otherwise, type not recognized
             raise NameError("Plot type not recognized")
@@ -478,11 +578,11 @@ class plots():
         # Get average and stdev
         av,std = self.stats.av_std(method=method)
 
-        # plot it
+        # plot av and stdev and set other parameters
         p1, = ax.plot(self.data.dlys,av)
         p2, = ax.plot(self.data.dlys,std)
-
         ax.legend([p1,p2],["Avg","Stdev"])
         ax.set_title("Standard Deviation and Average " + self.data.sortstring)
         ax.set_xlabel("Delay (ns)")
+        ax.set_ylim(-1,3)
         ax.grid(True)

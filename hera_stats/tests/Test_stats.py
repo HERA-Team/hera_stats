@@ -70,6 +70,10 @@ class Test_Plots():
         pl.plot_kstest(ax=ax)
         pl.plot_anderson(ax=ax)
         pl.plot_av_std(ax=ax)
+        
+        pl.sort(None)
+        pl.find_outliers()
+        pl.find_bad_items()
 
 
 class Test_Stats():
