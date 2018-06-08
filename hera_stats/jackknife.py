@@ -21,7 +21,7 @@ class jackknives():
     def __init__(self):
         self.onfile = 0
 
-    def split_ants(self,n_jacks):
+    def split_ants(self,n_jacks=40):
         """
         Splits available antenna into two groups randomly, and returns the UVPspec 
         of each.
@@ -44,9 +44,9 @@ class jackknives():
         """
         if type(self.uvp) == list:
             if len(self.uvp) != 1:
-                raise AttributeError("Split_ants can't jackknife multiple files at a time. Only takes\
-                                     len-1 lists or single UVPSpecData objects. Redo 'load_uvd' and set\
-                                     combine=False")
+                raise AttributeError("Split_ants can't jackknife multiple files at a time. Only takes" +
+                                     "len-1 lists or single UVPSpecData objects. Redo 'load_uvd' and set"+
+                                     "combine=False")
             else:
                 uvp = self.uvp[0]
 
@@ -95,7 +95,7 @@ class jackknives():
 
         return uvpls,groups,n_pairs
     
-    def split_files(self,n_jacks,identifier=None,pairs=None):
+    def split_files(self,identifier=None,pairs=None,all_permutations=True):
         """
         Splits the files into two groups, using one of two methods. One of these must be provided. 
         Providing both will error out.
@@ -109,9 +109,6 @@ class jackknives():
         
         Parameters
         ----------
-        n_jacks: int
-            Currently pointless...
-
         identifier: string
             String segment to use as a filter for grouping files.
 
@@ -121,22 +118,21 @@ class jackknives():
         Returns
         -------
         uvpl: list
-            List of UVPSpecData objects split accordingly
+            List of UVPSpecData objects split accordingly.
 
         grps: list
-            Groups used. Each contains two filepaths
+            Groups used. Each contains two filepaths.
 
-        
+        n_pairs: list
+            Number of baseline pairs used in each jackknife.
         """
+        # Sanity checks
         if type(self.uvp) != list:
             raise AttributeError("Split files needs a list of uvp objects.")
-
         if len(self.uvp) < 2:
-            print "Warning: fewer than two files supplied. Try combine = False for load_uvd."
-
+            raise AttributeError("Fewer than two files supplied. Make sure combine = False for load_uvd.")
         if identifier != None and pairs != None:
             raise AttributeError("Please only specify either identifier or file pairs.")
-
         if identifier == None and pairs == None:
             raise AttributeError("No identifier or file pair list specified.")
 
@@ -145,6 +141,7 @@ class jackknives():
 
             grp1,grp2,uvp1,uvp2 = [],[],[],[]
             for i,f in enumerate(self.files):
+                # Look for identifier in each file, sort accordingly
                 if identifier in f:
                     grp1 += [f]
                     uvp1 += [self.uvp[i]]
@@ -152,22 +149,94 @@ class jackknives():
                     grp2 += [f]
                     uvp2 += [self.uvp[i]]
 
-            for i in range(len(uvp1)):
-                for j in range(len(uvp2)):
-                    uvpl += [[uvp1[i],uvp2[j]]]
-                    grps += [[grp1[i],grp2[j]]]
+            if len(grp1) == 0:
+                raise AttributeError("Identifier not found in any filenames loaded.")
+            if len(grp2) == 0:
+                raise AttributeError("Identifier found in all filenames... Be more strict!")
 
-        if type(pairs) == list:
+            # If all permutations are requested, do every possible file matchup.
+            if all_permutations:
+                for i in range(len(uvp1)):
+                    for j in range(len(uvp2)):
+                        uvpl += [[uvp1[i],uvp2[j]]]
+                        grps += [[grp1[i],grp2[j]]]
+            else:
+                # Otherwise, do them in order of appearance
+                uvpl = [[uvp1[i],uvp2[i]] for i in range(len(uvp1))]
+                grps = [[grp1[i],grp2[i]] for i in range(len(grp1))]
+
+        # Split according to index pairs provided
+        elif type(pairs) == list:
             for idpair in identifier:
                 [i,j] = idpair
                 uvpl += [[self.uvp[i],self.uvp[j]]]
                 grps += [[self.files[i],self.files[j]]]
 
-        blns = [self.uvp[0].bl_to_antnums(bl) for bl in self.uvp[0].bl_array]
-        n_pairs = len(blns)
-
+        n_pairs = [len(self.uvp[0].bl_array)] * len(uvpl)
         return uvpl,grps,n_pairs
+
+    def split_times(self,binsizes = None):
+        """
+        Jackknife that splits the UVPSpecData into groups based on the binsize. 
+
+        The binsize is given in seconds, and data is split based on alternating bins, that is, if the time
+        array is [1,2,3,4,5,6] and the binsize is 1, then the data will be split into [1,3,5] and [2,4,6].
+        if binsize is 2, then data will be split into [1,2,5,6] and [3,4]. Finally, if binsize is 3, you get
+        [1,2,3] and [4,5,6]. If no binsize is profided, it will run a jackknife for every valid and unique
+        binsize.
+
+        Parameters
+        ----------
+        binsizes: float or list, optional
+            If float, jackknifes a single time using one binsize. If list, jackknives for every binsize
+            provided.
+
+        Returns
+        -------
+        uvpl: list
+            List of UVPSpecData objects split accordingly.
+
+        grps: list
+            Groups used. Each contains two filepaths.
+
+        n_pairs: list
+            Number of baseline pairs used in each jackknife.
+        """
+        if type(self.uvp) == list:
+            uvp = self.uvp[0]
+        if type(binsizes) != list:
+            binsizes = [binsizes]
+        if len(self.uvp) != 1:
+            raise AttributeError("Split_times can't jackknife multiple files at a time. Only takes" +
+                                 "len-1 lists or single UVPSpecData objects. Redo 'load_uvd' and set "+
+                                 "combine=False.")
+        times = np.array(sorted(np.unique(uvp.time_avg_array)))
+        secs = (times-times[0])*24*3600
+
+        # If no binsize provided, use every binsize possible and unique
+        if binsizes == [None]:
+            minperiod = secs[1] - secs[0]
+            binsizes = [x*minperiod for x in range(1,len(times)//2)]
         
+        uvpl = []
+        grps = []
+        for bs in binsizes:
+            # Phase randomly for added effect
+            phase = np.random.uniform(0,secs[1])
+            select = np.sin(np.pi*(secs + phase)/bs) >= 0
+
+            # Split times into bins
+            t1,t2 = times[select],times[~select]
+            minlen = min([len(t1),len(t2)])
+            t1 = t1[:minlen]
+            t2 = t2[:minlen]
+
+            # add to groups and uvpl
+            grps += [[list(t1),list(t2)]]
+            uvpl += [[uvp.select(times=t,inplace=False) for t in [t1,t2]]]
+
+        n_pairs = [len(self.uvp[0].bl_array)] * len(uvpl)
+        return uvpl,grps,None
 
     def no_jackknife(self):
         """
@@ -184,12 +253,18 @@ class jackknives():
         n_pairs: list
             The number of baseline pairs used.
         """
+        # Don't do anything
         blns = [self.uvp.bl_to_antnums(bl) for bl in self.uvp.bl_array]
         ants = np.unique(blns)
         grps = list(ants)
         n_pairs = len(blns)
 
-        return [self.uvp],[grps],n_pairs
+        return [self.uvp],[grps],[n_pairs]
+
+
+
+
+
 
 class jackknife():
 
@@ -199,7 +274,7 @@ class jackknife():
         """
         self.jackknives = jackknives()
         self.__labels = { self.jackknives.split_ants: "spl_ants", self.jackknives.no_jackknife: "no_jkf",
-                          self.jackknives.split_files: "spl_files"}
+                          self.jackknives.split_files: "spl_files",self.jackknives.split_times: "spl_times"}
         self.data_direc = "/lustre/aoc/projects/hera/H1C_IDR2/IDR2_1/"
         self.__loadtime = 0.
         self.__boottime = 0.
@@ -215,13 +290,10 @@ class jackknife():
         Parameters
         ----------
         filepath: string or list
-            Load_uvd takes two types of arguments. First, if any jackknife is to be used on the same
-            data (i.e. split_ants), then load_uvd can take a list of filepaths. However, if files are to 
-            be compared, then load_uvd takes a list of two lists, each one of which contains miriad filepaths.
-            Examples:
-            load_uvd([miriad1,miriad2])
-            load_uvd([[miriad1],[miriad2])
-            load_uvd([[miriad1A,miriad1B],[miriad1A,miriad1B]])
+            Single filepath or list of filepaths to load.
+
+        combine: boolean, optional
+            If False, keeps UVData files separate, so jackknife split_files can be run. Default: True.
 
         verbose: boolean, optional
             To print current actions and stopwatch. Default: False.
@@ -238,7 +310,12 @@ class jackknife():
         self.jackknives.files = filepath
         self.uvd = None
 
-        if not combine:
+        if combine:
+            # Calculate one UVData using every file provided
+            self.uvd = UVData()
+            self.uvd.read_miriad(filepath,antenna_nums=use_ants)
+            self.uvd = [self.uvd]
+        else:
             # Calculate uvData for each file provided
             self.uvd = []
             for fp in filepath:
@@ -246,15 +323,10 @@ class jackknife():
                 uvd.read_miriad(fp,antenna_nums=use_ants)
                 self.uvd += [copy.deepcopy(uvd)]
                 uvd = None
-        else:
-            # Calculate one UVData using every file provided
-            self.uvd = UVData()
-            self.uvd.read_miriad(filepath,antenna_nums=use_ants)
-            self.uvd = [self.uvd]
 
         self.__loadtime += time.time()-t
 
-    def jackknife(self, jkf_func, n_jacks, spw_ranges, beampath, baseline=None, pols=("XX","XX"),
+    def jackknife(self, jkf_func, spw_ranges, beampath, baseline=None, pols=("XX","XX"),
                   taper='blackman-harris',use_ants=None,savename=None,n_boots=100,imag=False,
                   bootstrap_times=True,returned=False,verbose=False,**kwargs):
         """
@@ -328,7 +400,8 @@ class jackknife():
                                     beampath=beampath,taper=taper,use_ants=use_ants)
 
         # Run jackknife splitting
-        uvpl,grps,n_pairs_l = jkf_func(n_jacks,**kwargs)
+        uvpl,grps,n_pairs_l = jkf_func(**kwargs)
+        n_jacks = len(uvpl)
 
         # Calculate delay spectrum and bootsrap errors
         dlys,spectra,errs = self.bootstrap_errs(uvpl,n_boots=n_boots,imag=imag,bootstrap_times=bootstrap_times)
@@ -351,7 +424,7 @@ class jackknife():
         dic = {"dlys": dlys, "spectra": spectra, "errs": errs, "grps":grps,"files":self.files,
                "times":times,"n_pairs":n_pairs_l,"spw_ranges":spw_ranges,
                "taper":taper,"jkntype":self.__labels[jkf_func]}
-        
+
         if returned:
             return dic
 
@@ -362,7 +435,7 @@ class jackknife():
         with open("./data/" + outname, "wb") as f:
             pickle.dump(dic, f, pickle.HIGHEST_PROTOCOL)
             if verbose: print "Saving to: '%s'" %outname
-        
+
     def calc_uvp(self, spw_ranges, baseline=None,pols=("XX","XX"),
                                     beampath=None,taper='blackman-harris',use_ants=None):
         """
@@ -487,9 +560,7 @@ class jackknife():
             proj = lambda l: np.abs(l.imag)
         else:
             proj = lambda l: np.abs(l.real)
-            
-        #proj = lambda l: l.real
-        
+
         # Calculate unique baseline pairs
         pairs = np.unique(uvp.blpair_array)
         blpairs = (uvp.blpair_to_antnums(pair) for pair in pairs)
@@ -530,7 +601,7 @@ class jackknife():
 
             lboots += [bootav]
 
-            # Find standard deviation of all bootstrapped spectra
+        # Find standard deviation of all bootstrapped spectra
         lboots = np.array(lboots)
         err = np.std(proj(lboots),axis=0)
 
@@ -583,11 +654,10 @@ class jackknife():
                 dlys,av,er = self.bootstrap_errs_once(_uvp,pol=pol,n_boots=n_boots,
                                                       imag=imag,
                                                       bootstrap_times=bootstrap_times)
-
                 # Add results to list
                 sp += [av]
                 e += [er]
-            
+
             avspec += [sp]
             errs += [e]
 
@@ -649,29 +719,44 @@ class jackknife():
         return []
 
     def validate(self):
-
+        """
+        Validates loaded UVdata files. If one file has antenna that another one does not, uses only
+        antenna that are found in every file
+        """
         ants = np.unique(np.hstack([u.get_ants() for u in np.hstack(self.uvd)]))
-
         use = []
         for a in ants:
             ha,nf = self.hasants([a])
             if False not in ha:
                 use += [a]
-
         ha,nf = self.hasants(use)
-
-
         for i in range(len(self.uvd)):
             if ha[i] == False:
                 self.uvd[i].select(antenna_nums=use)
 
     def hasants(self, ants):
+        """
+        Searches which files have ant data inside them.
         
+        Parameters
+        ----------
+        ants: list
+            List of antenna to search.
+
+        Returns
+        -------
+        hasants: list
+            List of booleans, true if the file has the antenna specified, false if missing even one.
+
+        notfoundin: list
+            List of files in which the antenna inputted were not found.
+        """
         myants = [u.get_ants() for u in np.hstack(self.uvd)]
         
         hasants = []
         notfoundin = []
         for i,ma in enumerate(myants):
+            # See if ants are in antenna list for specific UVData
             if sum([a not in ma for a in ants]) > 0:
                 hasants += [False]
                 notfoundin += [self.files[i]]
@@ -680,6 +765,9 @@ class jackknife():
         return hasants, notfoundin
 
     def clock_reset(self):
+        """
+        Resets the runtime timer.
+        """
         self.__loadtime = 0.
         self.__boottime = 0.
         self.__tottime = 0.

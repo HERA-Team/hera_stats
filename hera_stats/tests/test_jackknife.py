@@ -10,13 +10,19 @@ class Test_Jackknife():
     def setUp(self):
 
         self.filepath = "./hera_stats/data/gaussian.N18.2018-06-06.06_15_48/"
+        
+        hs.utils.shorten([self.filepath])
 
         self.jk = hs.jackknife()
         self.jk.load_uvd(self.filepath)
 
+        self.jk_small = hs.jackknife()
+        self.jk_small.load_uvd(self.filepath,use_ants=range(10))
+
         self.spw = [(600,700)]
         self.beampath = "./hera_stats/data/NF_HERA_Beams.beamfits"
         self.jk.calc_uvp(self.spw,beampath=self.beampath,baseline=(0,1))
+        self.jk_small.calc_uvp(self.spw,beampath=self.beampath,baseline=(0,1))
 
     def test_init(self):
 
@@ -27,7 +33,7 @@ class Test_Jackknife():
 
     def test_calc_uvp(self):
 
-        jk = self.jk
+        jk = self.jk_small
 
         spw = self.spw
         bp = self.beampath
@@ -44,7 +50,7 @@ class Test_Jackknife():
                          "blackman-harris", use_ants=use_ants)
         nt.assert_raises(ValueError, jk.calc_uvp, spw,bsl, pols, bp, 
                          "blackman-harris", use_ants=[0,1,2,3,4,5,6])
-        nt.assert_raises(ValueError, jk.calc_uvp, spw, (1,11), pols, bp, 
+        nt.assert_raises(AttributeError, jk.calc_uvp, spw, (1,11), pols, bp, 
                          "blackman-harris", use_ants=[0,1])
 
     def test_split_ants(self):
@@ -59,18 +65,27 @@ class Test_Jackknife():
             ants = np.array([uv.blpair_to_antnums(b) for b in blpairs]).flatten()
             nt.assert_true(sum([a in grps[0][i] for a in ants]) == len(ants))
 
+    def test_split_times(self):
+        jk = self.jk_small
+
+        uvpl, grps, n_pairs = jk.jackknives.split_times()
+
     def test_split_files(self):
-        pass
-        """
-        jk = self.jk
-        jk.load_uvd(["./hera_stats/data/gaussian.N18.2018-06-06.06_15_48/",
-                     "./hera_stats/data/gaussian.N18.2018-06-06.06_15_48/"],
-                    combine=False,use_ants=range(5))
+
+        jk = hs.jackknife()
+        jk.load_uvd([self.filepath]*2,
+                    combine=False,use_ants=range(10))
+        jk.calc_uvp(self.spw,baseline=(0,1),beampath=self.beampath,pols=("XX","XX"))
+
         jk.files[0] = "unknown"
         jk.jackknives.files[0] = "unknown"
-        uvpl,grps,n_pairs = jk.jackknives.split_files(1,"18")
-        uvpl,grps,n_pairs = jk.jackknives.split_files(1,None,[[0,1]])
-        """
+        uvpl,grps,n_pairs = jk.jackknives.split_files("18")
+        #uvpl,grps,n_pairs = jk.jackknives.split_files(pairs=[[0,1]])
+        
+        nt.assert_raises(AttributeError, jk.jackknives.split_files,"whattheheckisthis")
+        nt.assert_raises(AttributeError, self.jk_small.jackknives.split_files,"18")
+        nt.assert_raises(AttributeError, jk.jackknives.split_files,"18",[[0,1]])
+
 
     def test_bootstrap(self):
 
@@ -89,7 +104,7 @@ class Test_Jackknife():
 
         nt.assert_raises(TypeError, jk.jackknife, "nothing", 1, self.spw, self.beampath)
 
-        dic = jk.jackknife(jk.jackknives.split_ants, 1, self.spw, self.beampath, baseline=(0,1),
+        dic = jk.jackknife(jk.jackknives.split_ants, self.spw, self.beampath, baseline=(0,1),
                            n_boots = 10, returned = True,verbose=True,
                            savename="test")
 

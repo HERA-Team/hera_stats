@@ -3,12 +3,6 @@
 import ephem
 import os
 
-def timestamp():
-
-        t = ephem.now()
-        timestamp = str(t.datetime()).replace(" ",".").replace(":","_")[:19]
-        return timestamp
-
 class jkfdata():
     def __init__(self):
         """
@@ -25,7 +19,6 @@ class jkfdata():
         dic: dictionary
             Dictionary containing the data from the jackknife file
         """
-
         self.spectra = dic["spectra"]
         self.dlys = dic["dlys"]
         self.errs = dic["errs"]
@@ -39,12 +32,15 @@ class jkfdata():
         self.loaded = True
 
     def validate(self):
+        """
+        Checks if data is valid.
+        """
         if not self.loaded:
             raise AttributeError("No data loaded. Run load function")
 
     def __repr__(self):
 
-        string = "<hera_stats.utils.jkndata instance at %s>" %hex(id(self))
+        string = "<hera_stats.utils.jkfdata instance at %s>" %hex(id(self))
 
         if self.loaded == True:
             string +=  ("\n\nJackknife Type: \t\t%s \n" %self.jkntype +
@@ -86,11 +82,54 @@ def find_files(direc,endstring):
 
     return [direc + f for f in files]
 
-
 def shorten(files):
+    """
+    Removes the path from the files, returns only filenames.
+
+    Parameters
+    ----------
+    files: list
+        List of filepaths to shorten.
+
+    Returns
+    -------
+    shortened: list
+        List of shortened filepath strings
+    """
     sh = []
     for f in files:
         if f[-1] != "/":
             f += "/"
         sh += [f.split("/")[-2]]
     return sh
+
+def unique_items(grps):
+    """
+    Finds all unique items in a jackknife group list. Use this as opposed to np.unique because
+    np.unique cannot do baseline pairs
+
+    Parameters
+    ----------
+    grps: list
+        Groups directly from jaccknife data.
+
+    Returns
+    -------
+    items: list
+        Unique items found in grps.
+    """
+    unique = []
+    for glist in grps:
+        for g in glist:
+            for item in g:
+                if item not in unique:
+                    unique += [item]
+    return sorted(unique)
+
+def timestamp():
+    """
+    Returns a timestamp string.
+    """
+    t = ephem.now()
+    timestamp = str(t.datetime()).replace(" ",".").replace(":","_")[:19]
+    return timestamp
