@@ -479,7 +479,7 @@ class jackknife():
             ds = hp.PSpecData([uvd,uvd],[None,None],beam=beam)
 
             # Calculate baseline-pairs using the pairs chosen earlier
-            bls1,bls2,blpairs = hp.pspecdata.construct_blpairs(pairs, exclude_auto_bls=True, 
+            bls1,bls2,blpairs = hp.utils.construct_blpairs(pairs, exclude_auto_bls=True, 
                                                              exclude_permutations=True)
 
             # Calculate power spectrum
