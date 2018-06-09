@@ -18,9 +18,6 @@ class jackknives():
     should use and output a pair of uvps, one for each jacknife. Jackknives should
     also return a variable that defines the 
     """
-    def __init__(self):
-        self.onfile = 0
-
     def split_ants(self,n_jacks=40):
         """
         Splits available antenna into two groups randomly, and returns the UVPspec 
@@ -275,7 +272,6 @@ class jackknife():
         self.jackknives = jackknives()
         self.__labels = { self.jackknives.split_ants: "spl_ants", self.jackknives.no_jackknife: "no_jkf",
                           self.jackknives.split_files: "spl_files",self.jackknives.split_times: "spl_times"}
-        self.data_direc = "/lustre/aoc/projects/hera/H1C_IDR2/IDR2_1/"
         self.__loadtime = 0.
         self.__boottime = 0.
         self.__tottime = 0.

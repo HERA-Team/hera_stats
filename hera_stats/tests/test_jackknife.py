@@ -3,33 +3,35 @@ import hera_pspec as hp
 import pyuvdata
 import nose.tools as nt
 import numpy as np
+import os
+import copy
 
+from hera_stats.data import DATA_PATH
 
 class Test_Jackknife():
 
     def setUp(self):
 
-        self.filepath = "./hera_stats/data/gaussian.N18.2018-06-06.06_15_48/"
+        self.filepath = os.path.join(DATA_PATH,"gaussian.N18.2018-06-06.06_15_48/")
         
         hs.utils.shorten([self.filepath])
 
         self.jk = hs.jackknife()
         self.jk.load_uvd(self.filepath)
 
-        self.jk_small = hs.jackknife()
-        self.jk_small.load_uvd(self.filepath,use_ants=range(10))
-
-        self.spw = [(600,700)]
-        self.beampath = "./hera_stats/data/NF_HERA_Beams.beamfits"
+        print "Done Loading!"
+        self.spw = [(600,625)]
+        self.beampath = os.path.join(DATA_PATH, "NF_HERA_Beams.beamfits")
         self.jk.calc_uvp(self.spw,beampath=self.beampath,baseline=(0,1))
-        self.jk_small.calc_uvp(self.spw,beampath=self.beampath,baseline=(0,1))
+        self.jk_small = copy.deepcopy(self.jk)
+        self.jk_small.uvd[0].select(antenna_nums=[0,1,2])
 
     def test_init(self):
 
         jk = hs.jackknife()
         jk.load_uvd(self.filepath,use_ants=[0,1],verbose=True)
         nt.assert_is_instance(jk.uvd[0], pyuvdata.UVData)
-        hs.utils.find_files("./hera_stats/data/",".jkf")
+        hs.utils.find_files(DATA_PATH,".jkf")
 
     def test_calc_uvp(self):
 
@@ -39,19 +41,16 @@ class Test_Jackknife():
         bp = self.beampath
         bsl = (0,1)
         pols = ("XX","XX")
-        use_ants = None
 
-        jk.calc_uvp(spw,beampath=bp,baseline=bsl,pols=pols,use_ants=use_ants)
+        jk.calc_uvp(spw,beampath=bp,baseline=bsl,pols=pols)
 
         nt.assert_is_instance(jk.uvp[0], hp.uvpspec.UVPSpec)
         nt.assert_raises(AttributeError, jk.calc_uvp, spw, (0,3), pols, bp, 
-                         "blackman-harris", use_ants=use_ants)
+                         "blackman-harris")
         nt.assert_raises(ValueError, jk.calc_uvp, spw,bsl, ("YY","YY"), bp, 
-                         "blackman-harris", use_ants=use_ants)
-        nt.assert_raises(ValueError, jk.calc_uvp, spw,bsl, pols, bp, 
-                         "blackman-harris", use_ants=[0,1,2,3,4,5,6])
+                         "blackman-harris")
         nt.assert_raises(AttributeError, jk.calc_uvp, spw, (1,11), pols, bp, 
-                         "blackman-harris", use_ants=[0,1])
+                         "blackman-harris")
 
     def test_split_ants(self):
 
@@ -67,19 +66,16 @@ class Test_Jackknife():
 
     def test_split_times(self):
         jk = self.jk_small
-
         uvpl, grps, n_pairs = jk.jackknives.split_times()
 
     def test_split_files(self):
 
         jk = hs.jackknife()
-        jk.load_uvd([self.filepath]*2,
-                    combine=False,use_ants=range(10))
-        jk.calc_uvp(self.spw,baseline=(0,1),beampath=self.beampath,pols=("XX","XX"))
+        jk.uvp = self.jk_small.uvp*2
+        jk.jackknives.uvp = jk.uvp
+        jk.jackknives.files = ["thebestfile","thebiggestfile"]
 
-        jk.files[0] = "unknown"
-        jk.jackknives.files[0] = "unknown"
-        uvpl,grps,n_pairs = jk.jackknives.split_files("18")
+        uvpl,grps,n_pairs = jk.jackknives.split_files("best")
         #uvpl,grps,n_pairs = jk.jackknives.split_files(pairs=[[0,1]])
         
         nt.assert_raises(AttributeError, jk.jackknives.split_files,"whattheheckisthis")
@@ -100,11 +96,12 @@ class Test_Jackknife():
 
     def test_jackknife_short(self):
 
-        jk = self.jk
+        jk = self.jk_small
 
+        jk.clock_reset()
         nt.assert_raises(TypeError, jk.jackknife, "nothing", 1, self.spw, self.beampath)
 
-        dic = jk.jackknife(jk.jackknives.split_ants, self.spw, self.beampath, baseline=(0,1),
+        dic = jk.jackknife(jk.jackknives.split_times, self.spw, self.beampath, baseline=(0,1),
                            n_boots = 10, returned = True,verbose=True,
                            savename="test")
 
