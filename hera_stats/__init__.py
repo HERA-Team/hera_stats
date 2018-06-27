@@ -1,6 +1,6 @@
 # init for hera_stats
 
-from hera_stats.jackknife import jackknife
 from hera_stats import utils
-from hera_stats.plots import plots
-from hera_stats.jkf_stats import jkf_stats
+from hera_stats import plots
+from hera_stats import stats
+from hera_stats import jackknives
