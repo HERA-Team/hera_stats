@@ -2,59 +2,11 @@
 
 import ephem
 import os
+import copy
+from hera_cal import redcal
+import numpy as np
 
-class jkfdata():
-    def __init__(self):
-        """
-        Class for storing jackknife data.
-        """
-        self.loaded = False
-
-    def load(self, dic):
-        """
-        Loads the data using a dictionary.
-
-        Parameters
-        ----------
-        dic: dictionary
-            Dictionary containing the data from the jackknife file
-        """
-        self.spectra = dic["spectra"]
-        self.dlys = dic["dlys"]
-        self.errs = dic["errs"]
-        self.grps = dic["grps"]
-        self.jkntype = dic["jkntype"]
-        self.spw_ranges = dic["spw_ranges"]
-        self.times = dic["times"]
-        self.n_jacks = len(self.spectra)
-        self.jackpairs = len(self.spectra[0])
-        self.dic = dic
-        self.loaded = True
-
-    def validate(self):
-        """
-        Checks if data is valid.
-        """
-        if not self.loaded:
-            raise AttributeError("No data loaded. Run load function")
-
-    def __repr__(self):
-
-        string = "<hera_stats.utils.jkfdata instance at %s>" %hex(id(self))
-
-        if self.loaded == True:
-            string +=  ("\n\nJackknife Type: \t\t%s \n" %self.jkntype +
-                        "Number of Jackknife Runs: \t%i \n" % self.n_jacks +
-                        "Delay Range (ns): \t\t[%i, %i] \n" %(min(self.dlys),max(self.dlys)) + 
-                        "Delay Modes: \t\t\t%i \n" %len(self.dlys) +
-                        "Number of Times: \t\t%i \n" %len(self.times) + 
-                        "Spectral Width Ranges: \t\t" + str(self.spw_ranges))
-        else:
-            string +=  "\n\nNo Jackknife data loaded. Load through class functions."
-
-        return string
-
-def find_files(direc,endstring):
+def find_files(direc, endstring, remove=[]):
     """
     Given a directory path and a search string, finds files. Useful for looking for hera miriad files
     with the right suffixes.
@@ -70,38 +22,20 @@ def find_files(direc,endstring):
     if direc[-1] != "/":
         direc += "/"
 
+    if not isinstance(remove, list):
+        remove = [remove]
+
     st = endstring
 
     allf = os.listdir(direc)
     files = []
     for f in allf:
-        if f[-len(st):] == st:
+        if f[-len(st):] == st and sum([r in f for r in remove]) == 0:
             files += [f]
 
     files = sorted(files)
 
     return [direc + f for f in files]
-
-def shorten(files):
-    """
-    Removes the path from the files, returns only filenames.
-
-    Parameters
-    ----------
-    files: list
-        List of filepaths to shorten.
-
-    Returns
-    -------
-    shortened: list
-        List of shortened filepath strings
-    """
-    sh = []
-    for f in files:
-        if f[-1] != "/":
-            f += "/"
-        sh += [f.split("/")[-2]]
-    return sh
 
 def unique_items(grps):
     """
@@ -119,12 +53,33 @@ def unique_items(grps):
         Unique items found in grps.
     """
     unique = []
-    for glist in grps:
-        for g in glist:
-            for item in g:
-                if item not in unique:
-                    unique += [item]
+    [[[unique.append(item)
+       for item in g if (item not in unique)]
+      for g in glist]
+     for glist in grps]
+
     return sorted(unique)
+
+def plt_layout(req):
+    """Helper function for figuring out best layout of histogram table"""
+    # req is the requested number of plots. All numbers below it are potential divisors
+    divisors = np.arange(1,req)
+
+    # How many empty plots would be left
+    left = [req%a for a in divisors]
+
+    # difference between axis lengths
+    howsquare = [np.abs(req//a - a) for a in divisors]
+
+    lenientness = 0
+    while True:
+        for a in divisors-1:
+            # Look for smallest number of empty plots left and close to equal 
+            # side lengths
+            if left[a] <= lenientness and howsquare[a] <= lenientness:
+                return (divisors[a],int(np.ceil(float(req)/divisors[a])))
+        # If nothing found, decrease strictness
+        lenientness += 1
 
 def timestamp():
     """
