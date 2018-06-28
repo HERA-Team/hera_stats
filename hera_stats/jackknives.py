@@ -268,7 +268,7 @@ def split_files(uvp, files, identifier=None, filepairs=None, verbose=False):
             uvp2[i].jkftype = "spl_files"
             uvp2[i].labels = np.array([grp2[i]])
 
-        if lena(grp1) == 0:
+        if len(grp1) == 0:
             raise AttributeError("Identifier not found in any filenames "
                                  "loaded.")
         if len(grp2) == 0:
