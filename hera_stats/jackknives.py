@@ -6,7 +6,7 @@ import os
 import utils
 import astropy.coordinates as cp
 
-def _bootstrap_uvp_once(uvp, pol="xx", n_boots=100):
+def _bootstrap_uvp_once(uvp, pol="xx", n_boots=40):
     
     """
     Uses the bootstrap method to estimate the errors for a PSpecData object. 
@@ -350,4 +350,53 @@ def split_times(uvp, periods=None, verbose=False):
         uvp2.labels = ["spl_ants", "Period %.2f sec Odd" % per]
         uvpl.append([uvp1,uvp2])
 
+    return uvpl
+
+def split_gha(uvp, bins_list):
+    """
+    Splits based on the galactic hour-angle at the time of measurement.
+
+    Parameters
+    ----------
+    uvp: list or UVPSpec
+        List or single hera_pspec.UVPSpec object, containing data to use.
+
+    bins_list: list
+        One entry for each bin layout, can either be a integer, where min and max
+        hourangle values will automatically be set as limits, or ndarray, where
+        bins are specified.
+
+    Returns
+    -------
+    uvpl: list of UVPSpec pairs
+        The resulting data, one list per jackknife.
+    """
+    if isinstance(uvp, list):
+        uvp = hp.uvpspec.combine_uvpspec(uvp)
+
+    ref = dict(zip(uvp.lst_avg_array, uvp.time_avg_array))
+    rads = np.unique(uvp.lst_avg_array)
+
+    norms = cp.SkyCoord(rads, -23, unit=["rad", "deg"])
+    gha = norms.transform_to(cp.builtin_frames.Galactic)
+
+    uvpl = []
+    for bins in bins_list:
+        if isinstance(bins, int):
+            bins = utils.bin_wrap(gha.l.deg, bins)
+        inrange=[]
+        for i in range(len(bins) - 1):
+            gha_range = (bins[i], bins[i + 1])
+            val = np.array([utils.is_in_wrap(bins[i], bins[i + 1], deg)
+                            for deg in gha.l.deg])
+            jdays = [ref[rads[i]] for i in range(len(rads)) if val[i] == True]
+
+            if sum(jdays) == 0:
+                raise AttributeError("No times found in one or more of the bins specified.")
+
+            _uvp = uvp.select(times=jdays, inplace=False)
+            _uvp.jkftype = "spl_gha"
+            _uvp.labels = np.array([np.average(gha.l.deg[val])])
+            inrange.append(_uvp)
+        uvpl.append(inrange)
     return uvpl

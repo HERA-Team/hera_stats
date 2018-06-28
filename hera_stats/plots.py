@@ -60,7 +60,8 @@ def plot_spectra(pc, n=0, fig=None, sortby=None, show_groups=False,
     if show_groups:
         labels = dic["grps"][0]
     else:
-        labels = ["Antenna Group 1", "Antenna Group 2"]
+        labels = ["Group %i" % i
+                  for i in range(len(dic["grps"][0]))]
 
     # Plot spectra with errorbars
     if with_errors == True:
@@ -79,7 +80,8 @@ def plot_spectra(pc, n=0, fig=None, sortby=None, show_groups=False,
     ax.grid(True)
 
     # Set other details
-    ax.legend(p_l, labels + ["noise"], fontsize=8, loc=1)
+    if len(p_l) < 10 or show_groups is True:
+        ax.legend(p_l, labels + ["noise"], fontsize=8, loc=1)
     ax.set_title("Power Spectrum for Jackknife %i %s" % (n, dic["sortstring"]))
 
     if with_errors:
@@ -88,10 +90,10 @@ def plot_spectra(pc, n=0, fig=None, sortby=None, show_groups=False,
 
         # plot z scores as scatterplot
         zs = dic["zscores"]
-        if len(zs) > 1:
-            [ax2.scatter(dlys, z, marker="+", color="green") for z in zs]
+        if len(zs[0]) > 1:
+            [ax2.scatter(dlys, z, marker="+", color="green") for z in zs[0]]
         else:
-            ax2.scatter(dlys, zs, marker="+", color="green")
+            ax2.scatter(dlys, zs[0], marker="+", color="green")
         xlims = ax.get_xlim()
 
         # Plot zero line
@@ -145,20 +147,22 @@ def scatter(pc, ax=None, ylim=None, compare=True, proj=None, sortby=None):
         ax = f.add_subplot(111)
 
     # Get data to plot
-    xs = np.hstack([dlys]*len(spectra))
-    y1 = np.hstack([sp[0] for sp in spectra])
-    y2 = np.hstack([sp[1] for sp in spectra])
+    xs = np.hstack([dlys]*len(spectra)*len(spectra[0]))
+    ys = [np.hstack([sp[i] for sp in spectra]) for i in range(len(spectra[0]))]
+    #y2 = np.hstack([sp[1] for sp in spectra])
 
-    x = np.hstack([xs]*2)
-    y = np.hstack([y1, y2])
+    x = xs
+    y = np.hstack(ys)
 
-    if compare:
+    if compare and len(ys) < 10:
         # Set colors
-        colors = ["red"]*len(y1) + ["blue"]*len(y2)
+        colors = [["C%i" % i] * len(ys[i]) for i in range(len(ys))]
+        colors = np.hstack(colors)
 
         # Shuffle order so colors are randomly in front or behind others
         inds = range(len(x))
-        shuffle = np.random.choice(inds, len(inds), replace=False)
+        ys = np.hstack(ys)
+        shuffle = np.random.choice(inds, len(inds)-1, replace=False)
 
         xrand, yrand, crand = [], [], []
         for i in shuffle:
@@ -171,10 +175,10 @@ def scatter(pc, ax=None, ylim=None, compare=True, proj=None, sortby=None):
         colors = "black"
 
     if ylim is None:
-        ylim = [min(y), max(y)]
+        ylim = [np.min(y), np.max(y)]
 
     # Set alpha based on how many points there are, plot
-    alpha = 1./len(spectra) + 0.05
+    alpha = 1./(len(spectra) + 1) + 0.05
     ax.scatter(x, y, color=colors, edgecolors="none", alpha=alpha)
 
     # Set other data
@@ -250,22 +254,15 @@ def hist_2d(pc, plottype="varsum", ax=None, ybins=40, sortby=None, display_stats
     elif plottype == "raw":
         # Plot raw spectra, combine jackknife pairs
         dic = get_data(pc, proj=lambda x: np.abs(x.real).clip(10**-10, np.inf), sortby=sortby)
-        data = np.vstack(dic["spectra"])
+        data = dic["spectra"]
         ylims = (np.log10(np.min(data)),
                  np.log10(np.max(data)))
         ax.set_yscale("log")
 
-    elif plottype == "norm":
-        # Plot normed difference, that is, spectra devided by average
-        dic = get_data(pc, proj=lambda x: np.abs(x.real), sortby=sortby)
-        allspecs = np.vstack(dic["spectra"])
-        data = allspecs/np.average(allspecs, axis=0)
-        ylims = (np.min(data), np.max(data))
-
     elif plottype == "weightedsum":
         # Plot zscores using sum of variances method
         dic = stats.get_data(pc, sortby=sortby, zscore="weightedsum")
-        data = np.vstack(dic["zscores"])
+        data = dic["zscores"]
         ylims = (-5, 5)
 
     elif plottype == "imag":
@@ -289,13 +286,13 @@ def hist_2d(pc, plottype="varsum", ax=None, ybins=40, sortby=None, display_stats
                         max(dlys)+1,
                         len(dlys)+1)
 
-    x = np.hstack([dlys]*len(data))
-    y = np.hstack(data)
+    x = np.hstack([dlys]*len(data)*len(data[0]))
+    y = np.hstack(data).flatten()
 
     if display_stats:
         # Plot average and stdev if requested
-        avs = np.average(data, axis=0)
-        stdevs = np.std(data, axis=0)
+        avs = np.average(data, axis=(0,1))
+        stdevs = np.std(data, axis=(0,1))
         av, = ax.plot(dlys, avs, c="black", lw=2)
         sigma, = ax.plot(dlys, avs+stdevs, c="red", ls="--",
                          lw=2)

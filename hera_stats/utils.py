@@ -3,7 +3,6 @@
 import ephem
 import os
 import copy
-from hera_cal import redcal
 import numpy as np
 
 def find_files(direc, endstring, remove=[]):
@@ -80,6 +79,41 @@ def plt_layout(req):
                 return (divisors[a],int(np.ceil(float(req)/divisors[a])))
         # If nothing found, decrease strictness
         lenientness += 1
+def bin_wrap(angles, n):
+
+    degs = np.linspace(-360, 360, 720/10+1)
+    ha = np.hstack([angles-360, angles])
+
+    isindeg = [bool(sum((ha > degs[i]) * (ha < degs[i+1]))) for i in range(len(degs)-1)]
+    longest = None
+    rng = None
+    for i, val in enumerate(isindeg):
+        if val == True:
+            seq = isindeg[i: ]
+            try:
+                seq = seq[:seq.index(False)]
+            except ValueError:
+                pass
+            if len(seq) > longest:
+                longest = len(seq)
+                rng = (i, i + len(seq) + 1)
+
+    wrapped = ha[(ha > degs[rng[0]]) * (ha <= degs[rng[1]])]
+    bins = np.linspace(min(wrapped), max(wrapped), n+1)
+    bins -= bins//360 * 360
+    return bins
+
+def is_in_wrap(low, hi, angle):
+
+    if angle >= low and angle < hi:
+        return True
+    angle += 180
+    low += 180
+    hi += 180
+    if angle % 360 >= low % 360 and angle % 360 < hi % 360:
+        return True
+
+    return False
 
 def timestamp():
     """
