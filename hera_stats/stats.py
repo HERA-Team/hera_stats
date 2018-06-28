@@ -47,52 +47,66 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
     spectra, errs, grps, zs = [],[],[],[]
     jkftypes = []
 
-    # Find all (or only one) jackknife groups
+    # Make dictionary from jackknife names, to make sorting possible
     all_jkfs = pc.groups()
-    if isinstance(jkf, int):
-        all_jkfs = [j for j in all_jkfs if int(j.split(".")[1]) == jkf]
+    jkfinds = [j.split(".")[1] for j in all_jkfs]
+    jkfref = dict(zip(jkfinds, all_jkfs))
+
+    # If jkf is specified, use only that one jackknife
+    if jkf in jkfref.keys():
+        all_jkfs = [all_jkfs[jkf]]
 
     if len(all_jkfs) == 0:
         raise IndexError("Jackknife number requested not found.")
 
     nfail = 0
-    for jk in sorted(all_jkfs):
+    for jki in sorted(jkfref.keys()):
+        jk = jkfref[jki]
+
+        # Create power spectrum dictionary, also to make sorting possible
         groups = pc.spectra(jk)
+        ref = dict(zip([int(g[3:]) for g in groups], groups))
         spec_l, err_l, grp_l = [],[],[]
 
-        for g in groups:
+        for gi in sorted(ref.keys()):
+            g = ref[gi]
+
             # Get delays, spectra, and errors
             uvp = pc.get_pspec(jk,g)
             dlys = uvp.get_dlys(0) * 10**9
             key = uvp.get_all_keys()[0]
             avspec = proj(uvp.get_data(key)[0])
             errspec = proj(uvp.get_stats("bootstrap_errs", key)[0])
-            #noise = proj(uvp_avg.generate_noise_spectra(0, pol, 300)[bl])[0]
-
+            
             spec_l.append(avspec)
             err_l.append(errspec)
             grp_l.append(uvp.labels)
             jkftypes.append(jk.split(".")[0])
 
-        # Sort by specific item if needed.
+        # Sort by specific item if needed and pc has jackknife pairs
         if isinstance(sortby, int) and len(spec_l) == 2:
+            # Check if item is in groups
             ingrp = [str(sortby) in g for g in grp_l]
-            if all([i == False for i in ingrp]):
+
+            # If item not in either group, don't change anything
+            if all(np.equal(ingrp, False)):
                 if sortby is not None:
-                    #print "Item not found in jackknife %i" % int(jk.split(".")[1])
                     nfail += 1
                 ingrp = [True, False]
 
-            if all([ingrp[i] == i for i in [False, True]]):
+            # If sortby is in the second group, revese list
+            if all(np.equal(ingrp, [False, True])):
                 spec_l.reverse()
                 grp_l.reverse()
                 err_l.reverse()
 
+        # If reverse is requested, then reverse the lists
         elif sortby == "reverse":
             spec_l.reverse()
             grp_l.reverse()
             err_l.reverse()
 
+        # Calculate zscores for the list of spectra just loaded
         z = standardize(spec_l, err_l, method=zscore)
 
         spectra.append(spec_l)
@@ -113,9 +127,10 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
     else:
         sortstring = "(sorted by %s)" % str(sortby)
 
+    # Put everything into dictionary
     dic = {"dlys": dlys, "spectra": np.array(spectra), "errs": np.array(errs),
            "grps": grps, "jkftype": jkftype, "sortitem": sortby,
-           "sortstring": sortstring, "sortby": sortby, "zscores": zs}
+           "sortstring": sortstring, "zscores": np.array(zs)}
 
     return dic
 
@@ -153,7 +168,7 @@ def standardize(spectra, errs, method="weightedsum"):
     # Calculate z scores using sum of variances
     if method == "varsum" and len(spectra) == 2:
         comberr = np.sqrt(errs[0]**2 + errs[1]**2).clip(10**-10, np.inf)
-        z = (spectra[0] - spectra[1])/comberr
+        z = ((spectra[0] - spectra[1])/comberr)[None]
 
     # Or Calculate z scores with weighted sum
     elif method == "weightedsum" or len(spectra) > 2:
