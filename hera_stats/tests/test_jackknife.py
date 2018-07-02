@@ -26,16 +26,34 @@ class Test_Jackknife():
                                                          exclude_permutations=True)
         self.uvp = ds.pspec(bsl1, bsl2, (0,1), ("XX", "XX"), spw_ranges=[(600,610)], verbose=False)
 
+
+    def test_bootstrap_and_save(self):
+
+        uvp = self.uvp
+        hs.jackknives._bootstrap_single_uvp(uvp, "xx")
+        uvpl = hs.jackknives.split_ants(uvp, 1)
+        uvplb = hs.jackknives.bootstrap_jackknife(uvpl, "xx")
+
+        pc = hs.PSpecContainer("./test", "rw")
+        hs.jackknives.save_jackknife(pc, uvplb)
+
+        os.system("rm -f ./test*")
+
     def test_split_ants(self):
 
         uvpl = hs.jackknives.split_ants([self.uvp], 1, verbose=True)
 
+        nt.assert_raises(AssertionError, hs.jackknives.split_ants, 20000)
         nt.assert_raises(AssertionError, hs.jackknives.split_ants,
                         [self.uvp]*2, 1, True)
 
-    def test_split_times(self):
+    def test_stripe_times(self):
 
-        uvp = hs.jackknives.split_times(self.uvp, verbose=True)
+        uvp = hs.jackknives.stripe_times(self.uvp, verbose=True)
+        uvp = hs.jackknives.stripe_times(self.uvp, 100)
+        uvp = hs.jackknives.stripe_times(self.uvp, [100, 200])
+        nt.assert_equal(np.array(uvp).shape, (2, 2))
+        nt.assert_raises(AssertionError, hs.jackknives.stripe_times, np.array([]))
 
     def test_split_files(self):
 
@@ -48,15 +66,17 @@ class Test_Jackknife():
         nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18")
         nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18",[[0,1]])
 
-    def test_bootstrap_and_save(self):
+    def test_split_gha(self):
+        uvp = hs.jackknives.split_gha([self.uvp], bins_list=[10])
+        uvp = hs.jackknives.split_gha(self.uvp, bins_list=[np.linspace(228.2, 228.4, 4)], specify_bins=True)
+        
+        nt.assert_raises(AttributeError, hs.jackknives.split_gha, self.uvp, [(0,1,2)], True)
 
-        uvp = self.uvp
-        hs.jackknives._bootstrap_uvp_once(uvp)
-        uvpl = hs.jackknives.split_ants(uvp, 1)
-        uvplb = hs.jackknives.bootstrap_jackknife(uvpl)
+    def test_omit_ants(self):
 
-        hs.jackknives.save_jackknife(uvplb, savename="test")
+        uvp = hs.jackknives.omit_ants([self.uvp], [0, 1, 2])
+        nt.assert_equals(np.asarray(uvp).shape, (1, 3))
+        
+        uvp = hs.jackknives.omit_ants([self.uvp], 1)
+        
 
-        os.system("rm -f ./data/test*")
-        if len(os.listdir("./data")) == 0:
-            os.rmdir("./data")

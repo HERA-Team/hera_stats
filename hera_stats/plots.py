@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import stats
 import utils
-from stats import get_data
+from stats import get_pspec_stats
 
 
 def plot_spectra(pc, n=0, fig=None, sortby=None, show_groups=False,
@@ -42,7 +42,7 @@ def plot_spectra(pc, n=0, fig=None, sortby=None, show_groups=False,
     zlim: int or float, optional
         Limit of the zscore subplot y axis.
     """
-    dic = stats.get_data(pc, proj=proj, sortby=sortby, jkf=n)
+    dic = stats.get_pspec_stats(pc, proj=proj, sortby=sortby, jkf=n)
     dlys, spec, er = dic["dlys"], np.abs(dic["spectra"][0]), dic["errs"][0]
 
     if len(spec) < 2:
@@ -139,7 +139,7 @@ def scatter(pc, ax=None, ylim=None, compare=True, proj=None, sortby=None):
     sortby: int, list, or string, optional
         Item (e.g. antenna_num) to use to sort data. Default: None.
     """
-    dic = stats.get_data(pc, proj=lambda x: np.abs(x.real), sortby=sortby)
+    dic = stats.get_pspec_stats(pc, proj=lambda x: np.abs(x.real).clip(1e-10, np.inf), sortby=sortby)
     dlys, spectra, errs = dic["dlys"], dic["spectra"], dic["errs"]
     
     if ax is None:
@@ -147,16 +147,18 @@ def scatter(pc, ax=None, ylim=None, compare=True, proj=None, sortby=None):
         ax = f.add_subplot(111)
 
     # Get data to plot
-    xs = np.hstack([dlys]*len(spectra)*len(spectra[0]))
+    wid = (dlys[1] - dlys[0]) 
+    xs = np.hstack([dlys + np.random.uniform(-wid/2, wid/2, len(dlys)) 
+                    for i in range(len(spectra)*len(spectra[0]))])
     ys = [np.hstack([sp[i] for sp in spectra]) for i in range(len(spectra[0]))]
     #y2 = np.hstack([sp[1] for sp in spectra])
 
     x = xs
     y = np.hstack(ys)
 
-    if compare and len(ys) < 10:
+    if compare and len(ys):
         # Set colors
-        colors = [["C%i" % i] * len(ys[i]) for i in range(len(ys))]
+        colors = [["C%i" % (i//10)] * len(ys[i]) for i in range(len(ys))]
         colors = np.hstack(colors)
 
         # Shuffle order so colors are randomly in front or behind others
@@ -178,7 +180,7 @@ def scatter(pc, ax=None, ylim=None, compare=True, proj=None, sortby=None):
         ylim = [np.min(y), np.max(y)]
 
     # Set alpha based on how many points there are, plot
-    alpha = 1./(len(spectra) + 1) + 0.05
+    alpha = 0.4
     ax.scatter(x, y, color=colors, edgecolors="none", alpha=alpha)
 
     # Set other data
@@ -247,13 +249,13 @@ def hist_2d(pc, plottype="varsum", ax=None, ybins=40, sortby=None, display_stats
 
     if plottype == "varsum":
         # Plot zscores using sum of variances
-        dic = stats.get_data(pc, sortby=sortby)
+        dic = stats.get_pspec_stats(pc, sortby=sortby)
         data = dic["zscores"]
         ylims = (-5, 5)
 
     elif plottype == "raw":
         # Plot raw spectra, combine jackknife pairs
-        dic = get_data(pc, proj=lambda x: np.abs(x.real).clip(10**-10, np.inf), sortby=sortby)
+        dic = get_pspec_stats(pc, proj=lambda x: np.abs(x.real).clip(10**-10, np.inf), sortby=sortby)
         data = dic["spectra"]
         ylims = (np.log10(np.min(data)),
                  np.log10(np.max(data)))
@@ -261,13 +263,13 @@ def hist_2d(pc, plottype="varsum", ax=None, ybins=40, sortby=None, display_stats
 
     elif plottype == "weightedsum":
         # Plot zscores using sum of variances method
-        dic = stats.get_data(pc, sortby=sortby, zscore="weightedsum")
+        dic = stats.get_pspec_stats(pc, sortby=sortby, zscore="weightedsum")
         data = dic["zscores"]
         ylims = (-5, 5)
 
     elif plottype == "imag":
         # Plots zscores of imaginary values.
-        dic = stats.get_data(pc, sortby=sortby, proj=lambda x: x.imag)
+        dic = stats.get_pspec_stats(pc, sortby=sortby, proj=lambda x: x.imag)
         data = dic["zscores"]
         ylims = (-5, 5)
     else:
@@ -362,8 +364,7 @@ def plot_kstest(pc, ax=None, sortby=None, bins=None, method="varsum"):
 
     # Get ks information
     dlys, ks, pvals = stats.kstest(pc, sortby=sortby, 
-                                   method=method, bins=bins,
-                                        asspec=True)
+                                   method=method, bins=bins, summary=False)
 
     failfrac = sum(np.array(pvals) < np.array(ks))
 
@@ -420,7 +421,7 @@ def plot_anderson(pc, ax=None, sortby=None, method="varsum"):
         ax = fig.add_subplot(111)
 
     # Get anderson statistics
-    dlys, stat, crit = stats.anderson(pc, asspec=True, sortby=sortby, method=method)
+    dlys, stat, crit = stats.anderson(pc, summary=False, sortby=sortby, method=method)
 
     # Plot them
     p1 = ax.plot(dlys, stat)
@@ -471,10 +472,10 @@ def plot_zscore_stats(pc, ax=None, proj=None, sortby=None, method="varsum"):
         ax = fig.add_subplot(111)
 
     # Get average and stdev
-    dic = stats.get_data(pc, sortby=sortby, proj=proj, zscore=method)
+    dic = stats.get_pspec_stats(pc, sortby=sortby, proj=proj, zscore=method)
     dlys = dic["dlys"]
-    av = np.average(dic["zscores"], axis=0)
-    std = np.std(dic["zscores"], axis=0)
+    av = np.average(np.vstack(dic["zscores"]), axis=0)
+    std = np.std(np.vstack(dic["zscores"]), axis=0)
 
     # plot av and stdev and set other parameters
     p = [ax.errorbar(dlys, av, std/np.sqrt(len(dic["zscores"])))]
@@ -516,7 +517,7 @@ def plot_with_and_without(pc, item, fig=None, proj=None,
         fig = plt.figure(figsize=(8, 5))
     
     ax = fig.add_subplot(111)
-    dic = stats.get_data(pc, sortby=item, proj=lambda x: x.real)
+    dic = stats.get_pspec_stats(pc, sortby=item, proj=lambda x: x.real)
     spectra, errs = dic["spectra"], dic["errs"]
 
     av, err = [], []
@@ -592,13 +593,13 @@ def split_hist(pc, fig=None, bins=11, hist_bins=30, ylim=None, xlim=4,
         Item (e.g. antenna_num) to use to sort data. Default: None.
     """
 
-    dic = stats.get_data(pc, proj=proj, sortby=sortby)
+    dic = stats.get_pspec_stats(pc, proj=proj, sortby=sortby)
     dlys, spectra, errs = dic["dlys"], dic["spectra"], dic["errs"]
     if fig is None:
         fig = plt.figure(figsize=(12, 8))
 
     # Bin Z-scores into delay buckets
-    edges, binned = stats.bin_data(dlys, dic["zscores"], bins, return_edges=True)
+    edges, binned = stats.bin_data_into_dlys(dlys, dic["zscores"][:, 0], bins, return_edges=True)
 
     # Plot sample spectrum
     layout = utils.plt_layout(len(binned)+1)
@@ -621,7 +622,7 @@ def split_hist(pc, fig=None, bins=11, hist_bins=30, ylim=None, xlim=4,
 
     # these bins are for the histogram
     hbins = np.linspace(-xlim, xlim, hist_bins)
-    dlys, kspec, p_spec = stats.kstest(pc, asspec=True, bins=bins)
+    dlys, kspec, p_spec = stats.kstest(pc, summary=False, bins=bins)
 
     if ylim is None:
         std = np.median(np.std(dic["zscores"], axis=0))

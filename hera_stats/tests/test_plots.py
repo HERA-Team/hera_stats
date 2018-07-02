@@ -29,8 +29,8 @@ class Test_Plots():
         nt.assert_raises(IndexError, hs.plots.plot_spectra, pc, 100, fig=f)
         f.clear()
 
-        for mode in ["varsum","weightedsum","raw","norm"]:
-            hs.plots.hist_2d(pc, ax=ax, plottype = mode, display_stats=True)
+        for mode in ["varsum","weightedsum","raw"]:
+            hs.plots.hist_2d(pc, ax=ax, plottype = mode, display_stats=False)
             ax.clear()
 
         nt.assert_raises(NameError, hs.plots.hist_2d, pc, "nothing")
