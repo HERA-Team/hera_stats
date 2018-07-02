@@ -7,9 +7,11 @@ from scipy import stats as spstats
 import hera_pspec as hp
 import utils
 
-def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
+def get_pspec_stats(pc, jkf=None, proj=None, sortby=None, jkftype=None, zscore="varsum"):
     """
-    Retrieves pspec information from a PSpecContainer.
+    Retrieves pspec information from a PSpecContainer. The PSpecContainer must
+    have jackknife data inside of it, which takes the form group = {jkftype}.{int}
+    and pspec = grp{int}. See jackknives module for how to create these containers.
 
     Parameters
     ----------
@@ -21,8 +23,15 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
         Default: None.
 
     proj: func, optional
-        The projection function applied to the data before returned.
-        If none is specfied, uses only the real components. Default: None.
+        The projection function applied to the data before returned. Can be
+        used to isolate real components or imaginary components (and
+        corresponding errors). If none is specfied, uses only the real
+        components. Default: None.
+        
+        ex: 
+            proj = lambda x: x.real          # Returns real
+            proj = lambda x: x.imag          # Returns imaginary
+            proj = lambda x: np.abs(x.real)  # Returns abs of real
 
     sortby: item, optional
         Sorts the data by the item before returning. If split_ants is used,
@@ -39,32 +48,41 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
     dic: dict
         Dictionary contianing all of the data found in the PSpecContainer.
     """
-    assert isinstance(pc, hp.container.PSpecContainer), "Expected pc to be PSpecContainer, not %r" % type(pc)
+    assert isinstance(pc, hp.container.PSpecContainer), "Expected pc to be PSpecContainer, not {}".format(type(pc).__name__)
 
     if proj == None:
         proj = lambda x: x.real
     
     spectra, errs, grps, zs = [],[],[],[]
-    jkftypes = []
 
     # Make dictionary from jackknife names, to make sorting possible
-    all_jkfs = pc.groups()
-    jkfinds = [j.split(".")[1] for j in all_jkfs]
+    use_jkfs = [a for a in pc.groups() if "." in a]
+    all_jkfs = [a.split(".") for a in use_jkfs]
+    all_jkftypes = np.unique([a[0] for a in all_jkfs])
+    if len(all_jkftypes) > 1 and jkftype is not None:
+        raise AssertionError("Multiple jackknives found. Choose between: {}".format(all_jkftypes))
+    elif jkftype is None:
+        jkftype = all_jkftypes[0]
+
+    assert jkftype in all_jkftypes, "Specified jackknife type not found in container."
+
+    all_jkfs = [j for j in all_jkfs if j[0] == jkftype]
+    jkfinds = [int(j[1]) for j in all_jkfs]
     jkfref = dict(zip(jkfinds, all_jkfs))
 
     # If jkf is specified, use only that one jackknife
     if jkf in jkfref.keys():
         all_jkfs = [all_jkfs[jkf]]
-
-    if len(all_jkfs) == 0:
+    elif jkf is not None:
         raise IndexError("Jackknife number requested not found.")
 
     nfail = 0
     for jki in sorted(jkfref.keys()):
         jk = jkfref[jki]
+        jkstr = jk[0] + "." + jk[1]
 
         # Create power spectrum dictionary, also to make sorting possible
-        groups = pc.spectra(jk)
+        groups = pc.spectra(jkstr)
         ref = dict(zip([int(g[3:]) for g in groups], groups))
         spec_l, err_l, grp_l = [],[],[]
 
@@ -72,7 +90,7 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
             g = ref[gi]
 
             # Get delays, spectra, and errors
-            uvp = pc.get_pspec(jk,g)
+            uvp = pc.get_pspec(jkstr,g)
             dlys = uvp.get_dlys(0) * 10**9
             key = uvp.get_all_keys()[0]
             avspec = proj(uvp.get_data(key)[0])
@@ -81,7 +99,6 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
             spec_l.append(avspec)
             err_l.append(errspec)
             grp_l.append(uvp.labels)
-            jkftypes.append(jk.split(".")[0])
 
         # Sort by specific item if needed and pc has jackknife pairs
         if isinstance(sortby, int) and len(spec_l) == 2:
@@ -117,11 +134,6 @@ def get_data(pc, jkf=None, proj=None, sortby=None, zscore="varsum"):
     if nfail >= len(spectra):
         raise ValueError("Sortby item %s not found" % str(sortby))
 
-    if all([j == jkftypes[0] for j in jkftypes]):
-        jkftype = jkftypes[0]
-    else:
-        raise ValueError("All jackknifes must be of the same type")
-
     if sortby is None:
         sortstring = ""
     else:
@@ -140,15 +152,29 @@ def standardize(spectra, errs, method="weightedsum"):
 
     Parameters
     ----------
-    spectra: list (n_jacks x 2 x n_dlys)
-        A list of pairs of spectra, to be used to calculate z scores.
+    spectra: list
+        A list of pairs spectra, to be used to calculate z scores.
 
-    errs: list (n_jacks x 2 x n_dlys)
-        List of pairs of errors corresponding to the above spectra
+    errs: list 
+        List of errors corresponding to the above spectra
 
     method: string, optional
-        Method used to calculate z-scores.
-        Options: ["varsum", "weighted"]. Default: varsum.
+        Method used to calculate z-scores. 
+        Options: ["varsum", "weightedsum"]. Default: varsum.
+        
+        "Varsum" works only with two
+        jackknife groups, and the standard deviation is calculated by:
+        
+        zscore = (x1 - x2) / sqrt(err1**2 + err2**2)
+        
+        Method "weightedsum" works for any number of spectra (it defaults
+        if more than 2 groups are given) and calculates the weighted sum:
+        
+        avg_err = 1. / sum(err ** -2)
+        avg = avg_err * sum(x * err**-2)
+        zscore = (x1 - avg) / sqrt(avg_err * N)
+
+        Where N is the number of points used to calculate the average.
 
     Returns
     -------
@@ -173,11 +199,12 @@ def standardize(spectra, errs, method="weightedsum"):
     # Or Calculate z scores with weighted sum
     elif method == "weightedsum" or len(spectra) > 2:
         # Calculate weighted average and standard deviation.
-        cerrs = np.sqrt(1./np.sum(errs**-2, axis=0))
-        av = cerrs**2*np.sum(spectra*errs**-2, axis=0)
-        std = cerrs*np.sqrt(len(spectra))
+        aerrs = 1. / np.sum(errs ** -2, axis=0)
+        av = aerrs * np.sum(spectra * errs**-2, axis=0)
+        std = np.sqrt(aerrs * len(spectra))
+
         if len(spectra) == 2:
-            z = (spectra[0]-spectra[1])/(np.sqrt(2)*std)
+            z = ((spectra[0]-spectra[1])/(np.sqrt(2)*std))[None]
         elif len(spectra) > 2:
             z = np.vstack([(spec - av)/(std) for spec in spectra])
     else:
@@ -185,7 +212,7 @@ def standardize(spectra, errs, method="weightedsum"):
 
     return z
 
-def kstest(pc, asspec=False, sortby=None, proj=None, bins=None, method="varsum",
+def kstest(pc, summary=False, sortby=None, proj=None, bins=None, method="varsum",
            verbose=False):
     """
     The KS test is a test of normality, in this case, for a gaussian (avg,
@@ -197,9 +224,9 @@ def kstest(pc, asspec=False, sortby=None, proj=None, bins=None, method="varsum",
     pc: PSpecContainer
         The container in which jackknved data lives.
 
-    asspec: boolean, optional
-        If true, returns the ks test as a spectra, one value for each delay
-        mode.
+    summary: boolean, optional
+        If true, returns the overall failure rate. Otherwise, returns
+        the ks and p-value spectra.
 
     sortby: item, optional
         Sorts the data by the item before returning. If split_ants is used,
@@ -228,20 +255,20 @@ def kstest(pc, asspec=False, sortby=None, proj=None, bins=None, method="varsum",
         The fraction of delay modes that fail the KS test.
     """
     # Calculate zscores
-    dic = get_data(pc, sortby=sortby, proj=proj, zscore=method)
+    dic = get_pspec_stats(pc, sortby=sortby, proj=proj, zscore=method)
     dlys, zs = dic["dlys"], dic["zscores"]
 
     ks_l, pval_l = [], []
     fails = 0.
     if bins is not None:
-        dlys, data = bin_data(dlys, zs, bins)
+        dlys, data = bin_data_into_dlys(dlys, zs[:, 0], bins)
     else:
         data = np.array(zs).T
 
     for i, d in enumerate(data):
 
         # Do ks test on delay mode
-        [ks, pval] = spstats.kstest(d, spstats.norm(0, 1).cdf)
+        [ks, pval] = spstats.kstest(d.flatten(), spstats.norm(0, 1).cdf)
 
         # Save result
         ks_l += [ks]
@@ -254,13 +281,13 @@ def kstest(pc, asspec=False, sortby=None, proj=None, bins=None, method="varsum",
             print "%i" % dlys[i], st
 
     # Return proper data
-    if asspec:
+    if summary == False:
         return dlys, ks_l, pval_l
     else:
         failfrac = fails/len(dlys)
         return failfrac
 
-def anderson(pc, asspec=False, proj=None, sortby=None, method="varsum", verbose=False):
+def anderson(pc, summary=False, proj=None, sortby=None, method="varsum", verbose=False):
     """
     Does an Anderson-Darling test on the z-scores of the data. Prints
     results.
@@ -275,9 +302,9 @@ def anderson(pc, asspec=False, proj=None, sortby=None, method="varsum", verbose=
     pc: PSpecContainer
         The container in which jackknved data lives.
 
-    asspec: boolean, optional
-        If true, returns the ks test as a spectra, one value for each delay
-        mode.
+    summary: boolean, optional
+        If true, returns only the confidence intervals and the failure rates.
+        Otherwise, returns them for every delay mode. Default: False.
 
     proj: func, optional
         The projection function applied to the data before returned.
@@ -292,7 +319,7 @@ def anderson(pc, asspec=False, proj=None, sortby=None, method="varsum", verbose=
         Method used to calculate z-scores for Anderson Darling Test.
         Options: ["varsum", "weighted"]. Default: varsum.
 
-    showmore: boolean, optional
+    verbose: boolean, optional
         If true, prints out values neatly as well as returning them
 
     Returns
@@ -304,13 +331,13 @@ def anderson(pc, asspec=False, proj=None, sortby=None, method="varsum", verbose=
         Fraction of anderson darling failures for each significance level.
     """
     # Calculate z-scores
-    dic = get_data(pc, proj=proj, sortby=sortby, zscore=method)
+    dic = get_pspec_stats(pc, proj=proj, sortby=sortby, zscore=method)
     dlys, zs = dic["dlys"], dic["zscores"]
 
     # Calculate Anderson statistic and critical values for each delay mode
     statl = []
     for i, zcol in enumerate(np.array(zs).T):
-        stat, crit, sig = spstats.anderson(zcol, dist="norm")
+        stat, crit, sig = spstats.anderson(zcol.flatten(), dist="norm")
         statl += [stat]
 
     if verbose:
@@ -326,14 +353,14 @@ def anderson(pc, asspec=False, proj=None, sortby=None, method="varsum", verbose=
         fracs += [frac]
 
     # Return if specified
-    if asspec:
+    if summary == False:
         return dlys, statl, [list(crit)]*len(statl)
     else:
         return list(sig), fracs
 
-def avspec_with_and_without(pc, item, proj=None, method="varsum"):
+def avg_spec_with_and_without(pc, sortitem, proj=None, method="varsum"):
     """
-    Returns the average spectrum for groups with and withou item,
+    Returns the average spectrum for groups with and without item,
     and errors.
 
     Parameters
@@ -341,7 +368,7 @@ def avspec_with_and_without(pc, item, proj=None, method="varsum"):
     pc: PSpecContainer
         The container in which jackknved data lives.
 
-    item: int
+    sortitem: int
         The item to sort by, if groups is a list of items.
 
     proj: func, optional
@@ -353,7 +380,7 @@ def avspec_with_and_without(pc, item, proj=None, method="varsum"):
         Options: ["varsum", "weighted"]. Default: varsum.
     """
     # Get data
-    dic = get_data(pc, proj=proj, sortby=item)
+    dic = get_pspec_stats(pc, proj=proj, sortby=sortitem)
     dlys, spectra, errs = dic["dlys"], dic["spectra"], dic["errs"]
 
     # Slice data according into two groups
@@ -369,7 +396,7 @@ def avspec_with_and_without(pc, item, proj=None, method="varsum"):
 
     return avspecs, averrs
 
-def item_info(pc, item, proj=None):
+def item_summary(pc, item, proj=None):
     """
     Returns the summary for an item.
 
@@ -383,7 +410,7 @@ def item_info(pc, item, proj=None):
         The projection function applied to the data.
         If none is specfied, uses only the real components. Default: None.
     """
-    dic = get_data(pc, sortby=item, proj=proj)
+    dic = get_pspec_stats(pc, sortby=item, proj=proj)
 
     avg = np.average(dic["zscores"], axis=0)
     std = np.std(dic["zscores"], axis=0)
@@ -395,13 +422,13 @@ def item_info(pc, item, proj=None):
         print "Item %r has a weird point at: %r" % (item, dlysfl)
 
     n = len(dic["dlys"])
-    fails = kstest(pc, sortby=item, proj=None) * n
+    fails = kstest(pc, summary=True, sortby=item, proj=None) * n
 
     print "Sorting by item %r fails the ks test in %i/%i delay modes" % (item,
                                                                          fails, n)
     anderson(pc, verbose=True)
 
-def bin_data(dlys, spectra, bins, return_edges=False):
+def bin_data_into_dlys(dlys, spectra, bins, return_edges=False):
     """
     Bins spectra or zscores into delay ranges.
     """

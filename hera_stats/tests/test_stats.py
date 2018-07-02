@@ -14,18 +14,18 @@ class Test_Stats():
 
     def test_stats(self):
 
-        hs.stats.anderson(self.pc, verbose=True)
-        hs.stats.kstest(self.pc, verbose=True)
+        hs.stats.anderson(self.pc, summary=True, verbose=True)
+        hs.stats.kstest(self.pc, summary=True, verbose=True)
 
         p = lambda x: x.imag ** 2
-        hs.stats.anderson(self.pc, proj=p, asspec=True,verbose=True, method="weightedsum")
-        hs.stats.kstest(self.pc, proj=p, asspec=True, bins=10, verbose=True, method="weightedsum")
+        hs.stats.anderson(self.pc, proj=p, verbose=True, method="weightedsum")
+        hs.stats.kstest(self.pc, proj=p, bins=10, verbose=True, method="weightedsum")
 
-        hs.stats.avspec_with_and_without(self.pc, 1)
-        hs.stats.item_info(self.pc, 1)
+        hs.stats.avg_spec_with_and_without(self.pc, 1)
+        hs.stats.item_summary(self.pc, 1)
 
-        nt.assert_raises(ValueError, hs.stats.get_data, self.pc, sortby=10000)
-        nt.assert_raises(AssertionError, hs.stats.get_data, "Thats no moon...")
+        nt.assert_raises(ValueError, hs.stats.get_pspec_stats, self.pc, sortby=10000)
+        nt.assert_raises(AssertionError, hs.stats.get_pspec_stats, "Thats no moon...")
 
         nt.assert_raises(AttributeError, hs.stats.standardize, [0,1], [0])
         nt.assert_raises(AttributeError, hs.stats.standardize, [0], [0])
