@@ -1,0 +1,13 @@
+*.pyc
+*__pycache__/
+
+# build
+build/
+env/
+dist/
+eggs/
+*.eggs/
+*egg-info
+*GIT_INFO
+*ipynb_checkpoints
+*.backup
