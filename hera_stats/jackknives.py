@@ -7,7 +7,6 @@ import utils
 import astropy.coordinates as cp
 import time
 
-
 def _bootstrap_single_uvp(uvp, pol, blpairs=None, n_boots=40):
     
     """
@@ -90,7 +89,7 @@ def bootstrap_jackknife(uvp_list, pol, blpairs=None, n_boots=50):
     Parameters
     ----------
     uvp_list: list of UVPSpec pairs
-        The jackknived data, with UVPSpec.labels as the group and UVPSpec.jkftype as 
+        The jackknived data, with UVPSpec.labels as the group and UVPSpec.jktype as 
         the jackknife type, shape=(n, 2).
 
     pol: string
@@ -126,7 +125,7 @@ def save_jackknife(pc, uvp_list):
     """
     Saves a bootstrapped jackknife pair list to a PSpecContainer.
     Each jackknife has a type, specified in the jackknife function and
-    saved as uvp.jkftype, which is used to create the group name {jkftype}.{n},
+    saved as uvp.jktype, which is used to create the group name {jktype}.{n},
     where n is the location in uvp_list. then, each UVPSpec in uvp_list[n] is
     saved as grp{i}, where i is the index within uvp_list[n].
 
@@ -146,18 +145,20 @@ def save_jackknife(pc, uvp_list):
                                                                        type(uvp_list).__name__)
     assert isinstance(uvp_list[0][0], hp.UVPSpec), "entries of uvp_list must be UVPSpecs."
 
-    # Check if all jackknives are the same type
-    jkftypes = [u.jkftype  for uvp in uvp_list for u in uvp]
-    if all([j == jkftypes[0] for j in jkftypes]):
-        jkftype = jkftypes[0]
+    if all([hasattr(u, "jktype") for uvp in uvp_list for u in uvp]):
+        # Check if all jackknives are the same type
+        jktypes = [u.jktype for uvp in uvp_list for u in uvp]
+        if all([j == jktypes[0] for j in jktypes]):
+            jktype = jktypes[0]
+        else:
+            raise AttributeError("All jackknifes must be of the same type")
     else:
-        raise AttributeError("All jackknifes must be of the same type")
-
+        jktype = "unknown"
     for i, uvp_pair in enumerate(uvp_list):
-        jkf = "%s.%i" % (uvp_pair[0].jkftype, i)
+        jkf = "jackknives"
         for k, uvp in enumerate(uvp_pair):
             # Save pspec to group 
-            name = "grp%i" % k
+            name = "{}.{}.grp{}".format(jktype, i, k)
             pc.set_pspec(jkf, psname=name, pspec=uvp)
 
 def split_ants(uvp, n_jacks=40, verbose=False):
@@ -234,8 +235,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         # Set metadata for saving
         uvp1.labels = np.array(list(grps[0]))
         uvp2.labels = np.array(list(grps[1]))
-        uvp1.jkftype = "spl_ants"
-        uvp2.jkftype = "spl_ants"
+        uvp1.jktype = "spl_ants"
+        uvp2.jktype = "spl_ants"
 
         uvpl.append([uvp1,uvp2])
 
@@ -296,9 +297,9 @@ def split_files(uvp, files, identifier=None, filepairs=None, verbose=False):
         grp2, uvp2 = files[~infile], uvp[~infile]
         minlen = min([len(uvp1), len(uvp2)])
         for i in range(minlen):
-            uvp1[i].jkftype = "spl_files"
+            uvp1[i].jktype = "spl_files"
             uvp1[i].labels = np.array([grp1[i]])
-            uvp2[i].jkftype = "spl_files"
+            uvp2[i].jktype = "spl_files"
             uvp2[i].labels = np.array([grp2[i]])
 
         if len(grp1) == 0:
@@ -383,8 +384,8 @@ def stripe_times(uvp, period=None, verbose=False):
         # Set metadata
         uvp1.labels = "Period %.2f sec Even" % per
         uvp2.labels = "Period %.2f sec Odd" % per
-        uvp1.jkftype = "stripe_times"
-        uvp2.jkftype = "stripe_times"
+        uvp1.jktype = "stripe_times"
+        uvp2.jktype = "stripe_times"
         uvpl.append([uvp1,uvp2])
 
     return uvpl
@@ -457,7 +458,7 @@ def split_gha(uvp, bins_list, specify_bins=False):
             _uvp = uvp.select(times=jdays, inplace=False)
 
             # Set metadata
-            _uvp.jkftype = "spl_gha"
+            _uvp.jktype = "spl_gha"
             _uvp.labels = np.array([np.average(gha.l.deg[val])])
             inrange.append(_uvp)
 
@@ -519,7 +520,7 @@ def omit_ants(uvp, ant_nums):
         bl_i = np.array(map(uvp.antnums_to_bl, bl))[inds]
         uvp1 = uvp.select(bls=bl_i, inplace=False)
         uvp1.labels = np.array([ant_nums[i]])
-        uvp1.jkftype = "omit_ants"
+        uvp1.jktype = "omit_ants"
         uvp_list.append(uvp1)
 
     return [uvp_list]
