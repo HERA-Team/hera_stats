@@ -6,157 +6,83 @@ import pickle as pkl
 from scipy import stats as spstats
 import hera_pspec as hp
 import utils
+import copy 
+import jkset as jkset_lib
 
-def get_pspec_stats(pc, jkf=None, proj=None, sortby=None, jkftype=None, zscore="varsum"):
+
+def weightedsum(jkset, axis=1):
     """
-    Retrieves pspec information from a PSpecContainer. The PSpecContainer must
-    have jackknife data inside of it, which takes the form group = {jkftype}.{int}
-    and pspec = grp{int}. See jackknives module for how to create these containers.
+    Calculates the weighted sum average of the spectra over a specific axis.
+
+    The averages and errors are calculated in the following way:
+
+        avg_err = 1. / sum(err ** -2)
+        avg = avg_err * sum(x * err**-2)
+        std = sqrt(avg_err * len(x))
+
+    Thus, std is not the uncertainty on the average but the standard deviation
+    of the distribution of x.
 
     Parameters
     ----------
-    pc: PSpecContainer
-        The container in which jackknved data lives.
+    jkset: hera_stats.jkset.JKSet
+        JKSet with which to perform the weighted sum.
 
-    jkf: int, optional
-        If specified, only retrieves the data for this jackknife run.
-        Default: None.
-
-    proj: func, optional
-        The projection function applied to the data before returned. Can be
-        used to isolate real components or imaginary components (and
-        corresponding errors). If none is specfied, uses only the real
-        components. Default: None.
-        
-        ex: 
-            proj = lambda x: x.real          # Returns real
-            proj = lambda x: x.imag          # Returns imaginary
-            proj = lambda x: np.abs(x.real)  # Returns abs of real
-
-    sortby: item, optional
-        Sorts the data by the item before returning. If split_ants is used,
-        and one specifies sortby=1, then the first group will always contain
-        the antenna number 1. Default: None.
-
-    zscore: string, optional
-        Method of standardization to use. Automatically uses weighted sum if
-        more than 3 jackknife groups are detected.
-        Options: "varsum", "weightedsum". Default: "varsum".
+    axis: int, 0 or 1, optional
+        Axis along which to do the weighted sum. Default: 1.
 
     Returns
     -------
-    dic: dict
-        Dictionary contianing all of the data found in the PSpecContainer.
+    jkset_avg: JKSet
+        The average jkset, with errors that describe the standard deviation of the samples given.
     """
-    assert isinstance(pc, hp.container.PSpecContainer), "Expected pc to be PSpecContainer, not {}".format(type(pc).__name__)
+    jk = copy.deepcopy(jkset)
 
-    if proj == None:
-        proj = lambda x: x.real
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert axis in [0, 1], "Axis must be either 1 or 0."
+
+    # Do weighted sum calculation
+    aerrs = 1. / np.sum(jk.errs ** -2, axis=axis)
+    av = aerrs * np.sum(jk.spectra * jk.errs**-2, axis=axis)
+    std = (aerrs * len(jkset.spectra)) ** 0.5
     
-    spectra, errs, grps, zs = [],[],[],[]
+    # Transpose jkset if necessary
+    if axis == 1:
+        jk = jk.T()
 
-    # Make dictionary from jackknife names, to make sorting possible
-    use_jkfs = [a for a in pc.groups() if "." in a]
-    all_jkfs = [a.split(".") for a in use_jkfs]
-    all_jkftypes = np.unique([a[0] for a in all_jkfs])
-    if len(all_jkftypes) > 1 and jkftype is not None:
-        raise AssertionError("Multiple jackknives found. Choose between: {}".format(all_jkftypes))
-    elif jkftype is None:
-        jkftype = all_jkftypes[0]
+    # Average or sum metadata
+    nsamp = np.sum(jk.nsamples, axis=0)
+    integrations = np.average(jk.integrations, axis=0)
+    times = np.average(jk.times, axis=0)
 
-    assert jkftype in all_jkftypes, "Specified jackknife type not found in container."
+    uvp_list = jk._uvp_list[0]
 
-    all_jkfs = [j for j in all_jkfs if j[0] == jkftype]
-    jkfinds = [int(j[1]) for j in all_jkfs]
-    jkfref = dict(zip(jkfinds, all_jkfs))
+    # Set UVPSpec attrs
+    for i, uvp in enumerate(uvp_list):
+        uvp.data_array[0] = np.expand_dims(av[i][None], 2)
+        uvp.stats_array["bootstrap_errs"][0] = np.expand_dims(std[i][None], 2)
 
-    # If jkf is specified, use only that one jackknife
-    if jkf in jkfref.keys():
-        all_jkfs = [all_jkfs[jkf]]
-    elif jkf is not None:
-        raise IndexError("Jackknife number requested not found.")
+        uvp.integration_array[0] = integrations[i][None]
+        uvp.time_avg_array[0] = times[i][None]
+        uvp.time_1_array[0] = times[i][None]
+        uvp.time_2_array[0] = times[i][None]
+        uvp.nsample_array[0] = nsamp[i][None]
+        uvp.labels = np.array(["Weighted Sum"])
 
-    nfail = 0
-    for jki in sorted(jkfref.keys()):
-        jk = jkfref[jki]
-        jkstr = jk[0] + "." + jk[1]
+    # Create new JKSet
+    uvp_list = np.expand_dims(uvp_list, axis)
+    return jkset_lib.JKSet(uvp_list, "weightedsum")
 
-        # Create power spectrum dictionary, also to make sorting possible
-        groups = pc.spectra(jkstr)
-        ref = dict(zip([int(g[3:]) for g in groups], groups))
-        spec_l, err_l, grp_l = [],[],[]
-
-        for gi in sorted(ref.keys()):
-            g = ref[gi]
-
-            # Get delays, spectra, and errors
-            uvp = pc.get_pspec(jkstr,g)
-            dlys = uvp.get_dlys(0) * 10**9
-            key = uvp.get_all_keys()[0]
-            avspec = proj(uvp.get_data(key)[0])
-            errspec = proj(uvp.get_stats("bootstrap_errs", key)[0])
-            
-            spec_l.append(avspec)
-            err_l.append(errspec)
-            grp_l.append(uvp.labels)
-
-        # Sort by specific item if needed and pc has jackknife pairs
-        if isinstance(sortby, int) and len(spec_l) == 2:
-            # Check if item is in groups
-            ingrp = [str(sortby) in g for g in grp_l]
-
-            # If item not in either group, don't change anything
-            if all(np.equal(ingrp, False)):
-                if sortby is not None:
-                    nfail += 1
-                ingrp = [True, False]
-
-            # If sortby is in the second group, revese list
-            if all(np.equal(ingrp, [False, True])):
-                spec_l.reverse()
-                grp_l.reverse()
-                err_l.reverse()
-
-        # If reverse is requested, then reverse the lists
-        elif sortby == "reverse":
-            spec_l.reverse()
-            grp_l.reverse()
-            err_l.reverse()
-
-        # Calculate zscores for the list of spectra just loaded
-        z = standardize(spec_l, err_l, method=zscore)
-
-        spectra.append(spec_l)
-        errs.append(err_l)
-        grps.append(grp_l)
-        zs.append(z)
-
-    if nfail >= len(spectra):
-        raise ValueError("Sortby item %s not found" % str(sortby))
-
-    if sortby is None:
-        sortstring = ""
-    else:
-        sortstring = "(sorted by %s)" % str(sortby)
-
-    # Put everything into dictionary
-    dic = {"dlys": dlys, "spectra": np.array(spectra), "errs": np.array(errs),
-           "grps": grps, "jkftype": jkftype, "sortitem": sortby,
-           "sortstring": sortstring, "zscores": np.array(zs)}
-
-    return dic
-
-def standardize(spectra, errs, method="weightedsum"):
+def zscores(jkset, method="weightedsum", axis=1):
     """
-    Calculates the z scores for a list of split spectra and their errors.
+    Calculates the z scores for a JKSet along a specified axis. This
+    returns another JKSet object, which has the zscore data and errors
+    equal to 0.
 
     Parameters
     ----------
-    spectra: list
-        A list of pairs spectra, to be used to calculate z scores.
-
-    errs: list 
-        List of errors corresponding to the above spectra
+    jkset: hera_stats.jkset.JKSet
+        The jackknife set to use for calculating zscores.
 
     method: string, optional
         Method used to calculate z-scores. 
@@ -167,83 +93,83 @@ def standardize(spectra, errs, method="weightedsum"):
         
         zscore = (x1 - x2) / sqrt(err1**2 + err2**2)
         
-        Method "weightedsum" works for any number of spectra (it defaults
-        if more than 2 groups are given) and calculates the weighted sum:
+        Method "weightedsum" works for any number of spectra and
+        calculates the weighted mean with stats.weightedsum, then
+        calculates zscores like this:
         
-        avg_err = 1. / sum(err ** -2)
-        avg = avg_err * sum(x * err**-2)
-        zscore = (x1 - avg) / sqrt(avg_err * N)
-
-        Where N is the number of points used to calculate the average.
+        zscore = (x1 - avg) / avg_err
 
     Returns
     -------
     zs: list
         Returns zscores for every spectrum pair given.
     """
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
 
-    if len(spectra) != len(errs):
-        raise AttributeError("Spectra pair list and corresponding errors "
-                             "must be the same length")
-    if len(spectra) < 2:
-        raise AttributeError("Need more than two spectra")
+    shape = jkset.shape
+    assert axis in [0, 1], "Axis must be either 0 or 1."
+    assert shape[axis] >= 2, "Need at least two spectra."
 
-    spectra = np.array(spectra)
-    errs = np.array(errs)
+    if axis == 1:
+        jkset = jkset.T()
 
-    # Calculate z scores using sum of variances
-    if method == "varsum" and len(spectra) == 2:
-        comberr = np.sqrt(errs[0]**2 + errs[1]**2).clip(10**-10, np.inf)
-        z = ((spectra[0] - spectra[1])/comberr)[None]
+    spectra = jkset.spectra
+    errs = jkset.errs
+    
+    jkout = copy.deepcopy(jkset)
 
     # Or Calculate z scores with weighted sum
-    elif method == "weightedsum" or len(spectra) > 2:
+    if method == "weightedsum":
         # Calculate weighted average and standard deviation.
         aerrs = 1. / np.sum(errs ** -2, axis=0)
         av = aerrs * np.sum(spectra * errs**-2, axis=0)
         std = np.sqrt(aerrs * len(spectra))
+        z = np.array([(spec - av)/(std) for spec in spectra])
+        jkout.set_data(z, 0*z)
 
-        if len(spectra) == 2:
-            z = ((spectra[0]-spectra[1])/(np.sqrt(2)*std))[None]
-        elif len(spectra) > 2:
-            z = np.vstack([(spec - av)/(std) for spec in spectra])
+    # Calculate z scores using sum of variances
+    elif method == "varsum":
+        assert shape[axis] == 2, "Varsum can only take axes of length 2, got {}.".format(shape[axis])
+        comberr = np.sqrt(errs[0]**2 + errs[1]**2).clip(10**-10, np.inf)
+        z = ((spectra[0] - spectra[1])/comberr)[None]
+
+        # Use weightedsum to shrink jkset to size, then replace data
+        jkout = weightedsum(jkout, axis=0)
+        jkout.set_data(z, 0*z)
+
     else:
         raise NameError("Z-score calculation method not recognized")
 
-    return z
+    if axis == 1:
+        jkout = jkout.T()
 
-def kstest(pc, summary=False, sortby=None, proj=None, bins=None, method="varsum",
-           verbose=False):
+    jkout.jktype = "zscore_%s" % method
+    return jkout
+
+def kstest(jkset, summary=False, cdf=None, verbose=False):
     """
+    Does a kstest on spectra in jkset. The input jkset must have shape[0] == 1,
+    As the kstest is run by delay bin along the 1st axis. Indexing by row or column
+    of jkset will do the trick.
+
     The KS test is a test of normality, in this case, for a gaussian (avg,
     stdev) as specified by the parameter norm. If the p-value is below the
     KS stat, the null hypothesis (gaussian curve (0, 1)) is rejected.
 
     Parameters
     ----------
-    pc: PSpecContainer
-        The container in which jackknved data lives.
+    jkset: hera_stats.jkset.JKSet
+        The jackknife set to use for running the ks test. Must have shape[0] == 1.
 
     summary: boolean, optional
         If true, returns the overall failure rate. Otherwise, returns
         the ks and p-value spectra.
 
-    sortby: item, optional
-        Sorts the data by the item before returning. If split_ants is used,
-        and one specifies sortby=1, then the first group will always contain
-        the antenna number 1. Default: None.
-
-    proj: func, optional
-        The projection function applied to the data before returned.
-        If none is specfied, uses only the real components. Default: None.
-
-    bins: int or list, optional
-        If int, number of bins in which to bin data before conducting
-        ks test. If list, bins themselves. Default: None.
-
-    method: string, optional
-        Method used to calculate z-scores for Kolmogorov-Smirnov Test.
-        Options: ["varsum", "weighted"]. Default: varsum.
+    cdf: function, optional
+        If a test is needed against a cumulative distribution function that
+        is not a (0, 1) gaussian, then a different cdf can be supplied as a
+        scipy stats function. If None, automatically chooses
+        scipy.stats.norm(0, 1).cdf. Default: None.
 
     verbose: boolean, optional
         If true, prints information for every delay mode instead of
@@ -251,25 +177,27 @@ def kstest(pc, summary=False, sortby=None, proj=None, bins=None, method="varsum"
 
     Returns
     -------
+    ks: ndarray
+        If summary == False, returns all of the ks values as a spectrum over delay modes.
+
+    pval: ndarray
+        If summary == False, returns all of the p values as a spectrum over delay modes.
+
     failfrac: float
-        The fraction of delay modes that fail the KS test.
+        The fraction of delay modes that fail the KS test, if summary == True.
     """
-    # Calculate zscores
-    dic = get_pspec_stats(pc, sortby=sortby, proj=proj, zscore=method)
-    dlys, zs = dic["dlys"], dic["zscores"]
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert jkset.shape[0] == 1, "Input jkset must have first dimension 1."
+
+    if cdf == None:
+        cdf = spstats.norm(0, 1).cdf
+
+    spectra = jkset.spectra[0]
 
     ks_l, pval_l = [], []
     fails = 0.
-    if bins is not None:
-        dlys, data = bin_data_into_dlys(dlys, zs[:, 0], bins)
-    else:
-        data = np.array(zs).T
-
-    for i, d in enumerate(data):
-
-        # Do ks test on delay mode
-        [ks, pval] = spstats.kstest(d.flatten(), spstats.norm(0, 1).cdf)
-
+    for i, col in enumerate(spectra.T):
+        [ks, pval] = spstats.kstest(col, cdf)
         # Save result
         ks_l += [ks]
         pval_l += [pval]
@@ -278,16 +206,16 @@ def kstest(pc, summary=False, sortby=None, proj=None, bins=None, method="varsum"
 
         if verbose:
             st = ["pass", "fail"][isfailed]
-            print "%i" % dlys[i], st
+            print jkset.dlys[i], st
 
     # Return proper data
     if summary == False:
-        return dlys, ks_l, pval_l
+        return np.array(ks_l), np.array(pval_l)
     else:
-        failfrac = fails/len(dlys)
+        failfrac = fails/len(jkset.dlys)
         return failfrac
 
-def anderson(pc, summary=False, proj=None, sortby=None, method="varsum", verbose=False):
+def anderson(jkset, summary=False, verbose=False):
     """
     Does an Anderson-Darling test on the z-scores of the data. Prints
     results.
@@ -299,54 +227,51 @@ def anderson(pc, summary=False, proj=None, sortby=None, method="varsum", verbose
 
     Parameters
     ----------
-    pc: PSpecContainer
-        The container in which jackknved data lives.
+    jkset: hera_stats.jkset.JKSet
+        The jackknife set to use for running the anderson darling test.
+        Must have shape[0] == 1.
 
     summary: boolean, optional
         If true, returns only the confidence intervals and the failure rates.
         Otherwise, returns them for every delay mode. Default: False.
 
-    proj: func, optional
-        The projection function applied to the data before returned.
-        If none is specfied, uses only the real components. Default: None.
-
-    sortby: item, optional
-        Sorts the data by the item before returning. If split_ants is used,
-        and one specifies sortby=1, then the first group will always contain
-        the antenna number 1. Default: None.
-
-    method: string, optional
-        Method used to calculate z-scores for Anderson Darling Test.
-        Options: ["varsum", "weighted"]. Default: varsum.
-
     verbose: boolean, optional
-        If true, prints out values neatly as well as returning them
+        If true, prints out values neatly as well as returning them. Default: False.
 
     Returns
     -------
     sigs: list
-        Significance levels for the anderson darling test.
+        Significance levels for the anderson darling test. Returned if summary == True.
 
     fracs: list
         Fraction of anderson darling failures for each significance level.
+        Returned if summary == True.
+
+    stat_l: ndarray
+        The Anderson statistic, as a spectrum with a value for every delay mode in jkset.
+        Returned if summary == False.
+
+    crit_l: ndarray
+        The critical values, also returned as a spectrum that can be immediately plotted.
     """
-    # Calculate z-scores
-    dic = get_pspec_stats(pc, proj=proj, sortby=sortby, zscore=method)
-    dlys, zs = dic["dlys"], dic["zscores"]
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert jkset.shape[0] == 1, "Input jkset must have first dimension 1."
+
+    spectra = jkset.spectra[0]
 
     # Calculate Anderson statistic and critical values for each delay mode
-    statl = []
-    for i, zcol in enumerate(np.array(zs).T):
-        stat, crit, sig = spstats.anderson(zcol.flatten(), dist="norm")
-        statl += [stat]
+    stat_l = []
+    for i, col in enumerate(np.array(spectra).T):
+        stat, crit, sig = spstats.anderson(col.flatten(), dist="norm")
+        stat_l += [stat]
 
     if verbose:
-        print "Samples: %i" % len(statl)
+        print "Samples: %i" % len(stat_l)
 
     # Print and save failure rates for each significance level
     fracs = []
     for i in range(5):
-        frac = float(sum(np.array(statl) >= crit[i]))/len(statl) * 100
+        frac = float(sum(np.array(stat_l) >= crit[i]))/len(stat_l) * 100
         if verbose:
             print ("Significance level: %.1f \tObserved "
                    "Failure Rate: %.1f" % (sig[i], frac))
@@ -354,100 +279,6 @@ def anderson(pc, summary=False, proj=None, sortby=None, method="varsum", verbose
 
     # Return if specified
     if summary == False:
-        return dlys, statl, [list(crit)]*len(statl)
+        return np.array(stat_l), np.array([list(crit)]*len(stat_l))
     else:
         return list(sig), fracs
-
-def avg_spec_with_and_without(pc, sortitem, proj=None, method="varsum"):
-    """
-    Returns the average spectrum for groups with and without item,
-    and errors.
-
-    Parameters
-    ----------
-    pc: PSpecContainer
-        The container in which jackknved data lives.
-
-    sortitem: int
-        The item to sort by, if groups is a list of items.
-
-    proj: func, optional
-        The projection function applied to the data before returned.
-        If none is specfied, uses only the real components. Default: None.
-
-    method: string, optional
-        Method used to calculate z-scores for average spectra.
-        Options: ["varsum", "weighted"]. Default: varsum.
-    """
-    # Get data
-    dic = get_pspec_stats(pc, proj=proj, sortby=sortitem)
-    dlys, spectra, errs = dic["dlys"], dic["spectra"], dic["errs"]
-
-    # Slice data according into two groups
-    spectra = [np.array(spectra)[:, i, :] for i in [0, 1]]
-    errs = [np.array(errs)[:, i, :] for i in [0, 1]]
-
-    avspecs, averrs = [], []
-    for i in [0, 1]:
-        er = np.sqrt(1./np.sum(errs[i]**-2, axis=0))
-        sp = er**2*np.sum(spectra[i]*errs[i]**-2, axis=0)
-        avspecs.append(sp)
-        averrs.append(er)
-
-    return avspecs, averrs
-
-def item_summary(pc, item, proj=None):
-    """
-    Returns the summary for an item.
-
-    pc: PSpecContainer
-        The container in which jackknved data lives.
-
-    item: int
-        The item to sort by, if groups is a list of items.
-
-    proj: func, optional
-        The projection function applied to the data.
-        If none is specfied, uses only the real components. Default: None.
-    """
-    dic = get_pspec_stats(pc, sortby=item, proj=proj)
-
-    avg = np.average(dic["zscores"], axis=0)
-    std = np.std(dic["zscores"], axis=0)
-    err = std/np.sqrt(len(dic["zscores"]))
-
-    failed = np.where(abs((avg) / err) > 4)[0]
-    if len(failed) > 0:
-        dlysfl = dic["dlys"][failed]
-        print "Item %r has a weird point at: %r" % (item, dlysfl)
-
-    n = len(dic["dlys"])
-    fails = kstest(pc, summary=True, sortby=item, proj=None) * n
-
-    print "Sorting by item %r fails the ks test in %i/%i delay modes" % (item,
-                                                                         fails, n)
-    anderson(pc, verbose=True)
-
-def bin_data_into_dlys(dlys, spectra, bins, return_edges=False):
-    """
-    Bins spectra or zscores into delay ranges.
-    """
-
-    spectra = np.array(spectra)
-    if isinstance(bins, int):
-        walls = np.linspace(min(dlys)-1,
-                            max(dlys)+1,
-                            bins+1)
-    else:
-        walls = bins
-
-    select = [(dlys > walls[i]) * (dlys < walls[i+1])
-              for i in range(len(walls)-1)]
-
-    binned = np.array([np.hstack(spectra[:, sel]) for sel in select])
-
-    if return_edges:
-        return walls, binned
-    else:
-        dlys = walls[:-1] + (walls[1] - walls[0])/2
-        return dlys, binned
