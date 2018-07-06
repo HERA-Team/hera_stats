@@ -76,8 +76,8 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
     ax.grid(True)
 
     # Set other details
-    if len(p_l) < 10 or show_groups is True:
-        ax.legend(p_l, labels + ["noise"], fontsize=8, loc=1)
+    if len(p_l) < 10 and show_groups is True:
+        ax.legend(p_l, labels, fontsize=8, loc=1)
     ax.set_title("Power Spectrum")
 
     if with_errors and len(spec) > 1:

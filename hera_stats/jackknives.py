@@ -121,7 +121,7 @@ def bootstrap_jackknife(uvp_list, pol, blpairs=None, n_boots=50):
         uvp_boot_list.append(bspair)
     return uvp_boot_list
 
-def save_jackknife(pc, uvp_list):
+def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
     """
     Saves a bootstrapped jackknife pair list to a PSpecContainer.
     Each jackknife has a type, specified in the jackknife function and
@@ -145,7 +145,8 @@ def save_jackknife(pc, uvp_list):
                                                                        type(uvp_list).__name__)
     assert isinstance(uvp_list[0][0], hp.UVPSpec), "entries of uvp_list must be UVPSpecs."
 
-    if all([hasattr(u, "jktype") for uvp in uvp_list for u in uvp]):
+    if set_jktype is None:
+        assert all([hasattr(u, "jktype") for uvp in uvp_list for u in uvp]), "If not all uvps have attribute 'jktype', one must be specified via parameter 'set_jktype'"
         # Check if all jackknives are the same type
         jktypes = [u.jktype for uvp in uvp_list for u in uvp]
         if all([j == jktypes[0] for j in jktypes]):
@@ -153,13 +154,15 @@ def save_jackknife(pc, uvp_list):
         else:
             raise AttributeError("All jackknifes must be of the same type")
     else:
-        jktype = "unknown"
+        assert isinstance(set_jktype, str), "set_jktype must be a string."
+        jktype = set_jktype
+
     for i, uvp_pair in enumerate(uvp_list):
         jkf = "jackknives"
         for k, uvp in enumerate(uvp_pair):
             # Save pspec to group 
             name = "{}.{}.grp{}".format(jktype, i, k)
-            pc.set_pspec(jkf, psname=name, pspec=uvp)
+            pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
 def split_ants(uvp, n_jacks=40, verbose=False):
     """
@@ -239,87 +242,6 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         uvp2.jktype = "spl_ants"
 
         uvpl.append([uvp1,uvp2])
-
-    return uvpl
-
-
-def split_files(uvp, files, identifier=None, filepairs=None, verbose=False):
-    """
-    Splits the files into two groups, using one of two methods. One of
-    these must be provided. Providing both will error out.
-
-    If an identifier is specified, the jackknife finds the files that
-    have the identifier and compares them to those which don't. It
-    automatically does every combination but only up to a maximum of
-    n_jacks (not yet tho).
-
-    If pairs are specified, which is a list of len-2 lists, the pairs are
-    selected using two indices provided. This is essentially a list of
-    pairs of indices to use for selecting files.
-
-    Parameters
-    ----------
-    uvp: list of UVPSpec objects
-        One entry to this list corresponds to one file, to be named in the
-        files kwarg.
-
-    files: list of strings
-        The filepaths of each corresponding UVPSpec in uvp.
-
-    identifier: string, optional
-        String segment to use as a filter for grouping files.
-
-    pairs: list, optional
-        List of index pairs, for a more manual selection of file groupings.
-
-    Returns
-    -------
-    uvpl: list
-        List of UVPSpecData objects split accordingly.
-    """
-    # Sanity checks
-    assert isinstance(uvp, list), "Split files needs a list of uvp objects."
-    if len(uvp) < 2:
-        raise AttributeError("Fewer than two files supplied. Make sure "
-                             "combine = False for load_uvd.")
-    if identifier is not None and filepairs is not None:
-        raise AttributeError("Please only specify either identifier or "
-                             "file pairs.")
-    if identifier is None and filepairs is None:
-        raise AttributeError("No identifier or file pair list specified.")
-
-    uvp = np.array(uvp)
-    files = np.array(files)
-    if type(identifier) == str:
-
-        infile = np.array([identifier in f for f in files])
-        grp1, uvp1 = files[infile], uvp[infile]
-        grp2, uvp2 = files[~infile], uvp[~infile]
-        minlen = min([len(uvp1), len(uvp2)])
-        for i in range(minlen):
-            uvp1[i].jktype = "spl_files"
-            uvp1[i].labels = np.array([grp1[i]])
-            uvp2[i].jktype = "spl_files"
-            uvp2[i].labels = np.array([grp2[i]])
-
-        if len(grp1) == 0:
-            raise AttributeError("Identifier not found in any filenames "
-                                 "loaded.")
-        if len(grp2) == 0:
-            raise AttributeError("Identifier found in all filenames... "
-                                 "Be more strict!")
-
-        print uvp1, uvp2
-        uvpl = [[uvp1[i], uvp2[i]] for i in range(len(uvp1))]
-        grps = [[grp1[i], grp2[i]] for i in range(len(grp1))]
-
-        if verbose:
-            print "Found %i pairs of files" % len(uvpl)
-
-    # Split according to index pairs provided
-    elif type(filepairs) == list:
-        uvpl = [[uvp[i], uvp[j]] for [i,j] in filepairs]
-        grps = [[files[i], files[j]] for [i,j] in filepairs]
 
     return uvpl
 
