@@ -12,8 +12,8 @@ class Test_Jackknife():
 
     def setUp(self):
 
-        self.filepath = os.path.join(DATA_PATH,"gaussian.N18.2018-06-06.06_15_48/")
-        self.beampath = os.path.join(DATA_PATH, "NF_HERA_Beams.beamfits")
+        self.filepath = os.path.join(DATA_PATH,"gaussian.N18.xx.sim/")
+        self.beampath = os.path.join(DATA_PATH, "HERA_NF_dipole_power.beamfits")
 
         uvd = UVData()
         uvd.read_miriad(self.filepath)
@@ -50,25 +50,14 @@ class Test_Jackknife():
     def test_stripe_times(self):
 
         uvp = hs.jackknives.stripe_times(self.uvp, verbose=True)
-        uvp = hs.jackknives.stripe_times(self.uvp, 100)
-        uvp = hs.jackknives.stripe_times(self.uvp, [100, 200])
+        uvp = hs.jackknives.stripe_times(self.uvp, 21.)
+        uvp = hs.jackknives.stripe_times(self.uvp, [21., 32.])
         nt.assert_equal(np.array(uvp).shape, (2, 2))
         nt.assert_raises(AssertionError, hs.jackknives.stripe_times, np.array([]))
 
-    def test_split_files(self):
-
-        uvp = [self.uvp]*2
-        files = ["thebestfile","thebiggestfile"]
-        
-        uvpl = hs.jackknives.split_files(uvp, files, "best", verbose=True)
-
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "whattheheckisthis")
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18")
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18",[[0,1]])
-
     def test_split_gha(self):
-        uvp = hs.jackknives.split_gha([self.uvp], bins_list=[10])
-        uvp = hs.jackknives.split_gha(self.uvp, bins_list=[np.linspace(228.2, 228.4, 4)], specify_bins=True)
+        uvp = hs.jackknives.split_gha([self.uvp], bins_list=[1])
+        uvp = hs.jackknives.split_gha(self.uvp, bins_list=[np.linspace(228.2, 228.3, 1)], specify_bins=True)
         
         nt.assert_raises(AttributeError, hs.jackknives.split_gha, self.uvp, [(0,1,2)], True)
 

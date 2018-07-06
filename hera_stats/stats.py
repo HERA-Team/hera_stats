@@ -55,7 +55,7 @@ def weightedsum(jkset, axis=1):
     integrations = np.average(jk.integrations, axis=0)
     times = np.average(jk.times, axis=0)
 
-    uvp_list = jk._uvp_list[0]
+    uvp_list = copy.deepcopy(jk._uvp_list[0])
 
     # Set UVPSpec attrs
     for i, uvp in enumerate(uvp_list):

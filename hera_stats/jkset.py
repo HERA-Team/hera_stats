@@ -13,7 +13,7 @@ class JKSet():
 
         Parameters
         ----------
-        pc_uvp: PSpecContainer of 2D list
+        pc_uvp: PSpecContainer or 2D list
             The input for the JKSet. Each UVPSpec in either the container or the list
             must contain only one spectrum, and a stats_array entry named
             "bootstrap_errors."
@@ -65,7 +65,7 @@ class JKSet():
 
         self._load_uvp(uvp_list, jktype)
 
-    def _load_uvp(self, uvp_list, jktype, proj=None):
+    def _load_uvp(self, uvp_list, jktype, proj=None, error_field="bootstrap_errs"):
         """
         Loads a 2D list of UVPSpecs.
 
@@ -104,7 +104,7 @@ class JKSet():
                 dlys = uvp.get_dlys(0) * 10**9
                 key = uvp.get_all_keys()[0]
                 avspec = proj(uvp.get_data(key)[0])
-                errspec = proj(uvp.get_stats("bootstrap_errs", key)[0])
+                errspec = proj(uvp.get_stats(error_field, key)[0])
 
                 # Set saved values with list comprehension, should be same order as to_save names.
                 to_save_vals = [avspec, errspec, list(uvp.labels),
