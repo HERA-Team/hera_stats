@@ -161,6 +161,8 @@ def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
         jkf = "jackknives"
         for k, uvp in enumerate(uvp_pair):
             # Save pspec to group 
+            uvp.label_1_array = np.array([0])
+            uvp.label_2_array = np.array([0])
             name = "{}.{}.grp{}".format(jktype, i, k)
             pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
@@ -387,7 +389,7 @@ def split_gha(uvp, bins_list, specify_bins=False):
         uvpl.append(inrange)
     return uvpl
 
-def omit_ants(uvp, ant_nums):
+def omit_ants(uvp, ant_nums=None):
     """
     Splits UVPSpecs into groups, omitting one antenna from each.
 
@@ -407,7 +409,7 @@ def omit_ants(uvp, ant_nums):
     # Check if uvp is valid and combine list.
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
-            uvp = hs.uvpspec.combine_uvpspec(uvp)
+            uvp = hp.uvpspec.combine_uvpspec(uvp)
         else:
             uvp = uvp[0]
 
@@ -416,6 +418,8 @@ def omit_ants(uvp, ant_nums):
         ant_nums = list(ant_nums)
     elif isinstance(ant_nums, int):
         ant_nums = [ant_nums]
+    elif ant_nums == None:
+        ant_nums = np.unique([uvp.bl_to_antnums(b) for b in uvp.bl_array])
     else:
         raise AssertionError("Expected ant_nums to be list or int, not {}".format(type(ant_nums).__name__))
 
@@ -446,3 +450,22 @@ def omit_ants(uvp, ant_nums):
         uvp_list.append(uvp1)
 
     return [uvp_list]
+
+def sep_files(uvp, filenames):
+    """
+    Calculates pspec on individual files.
+    """
+    if isinstance(uvp, hp.UVPSpec):
+        uvp = [uvp]
+    assert isinstance(uvp, (list, tuple, np.ndarray)), "uvp must be a list."
+    assert isinstance(uvp[0], hp.UVPSpec), "uvp items must be UVPSpecs."
+    assert isinstance(filenames, (list, tuple, np.ndarray)), "filenames must be a list."
+    assert isinstance(filenames[0], str), "filnames must be strings."
+
+    uvp_list = []
+    for i, u in enumerate(uvp):
+        u.labels = np.array([filenames[i]])
+        u.jktype = "sep_files"
+        uvp_list.append([u])
+
+    return uvp_list
