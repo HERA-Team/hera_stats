@@ -35,8 +35,8 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
     logscale: boolean, optional
         If true, plots spectra on a logarithmic y axis. Default: True.
     """
-    assert jkset.shape[0] == 1, "Input jkset must have shape[0] == 1."
-    spec, er = jkset.spectra[0], jkset.errs[0]
+    assert jkset.ndim == 1, "Input jkset must have shape[0] == 1."
+    spec, er = jkset.spectra, jkset.errs
 
     if fig is None:
         fig = plt.figure(figsize=(8, 5))
@@ -86,7 +86,7 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
 
         # plot z scores as scatterplot
         zs = stats.zscores(jkset, method=method)
-        [ax2.scatter(zs.dlys, z, marker="+", color="green") for z in zs.spectra[0]]
+        [ax2.scatter(zs.dlys, z, marker="+", color="green") for z in zs.spectra]
         xlims = ax.get_xlim()
 
         # Plot zero line
@@ -127,8 +127,8 @@ def scatter(jkset, ax=None, ylim=None, compare=True, logscale=True):
     logscale: boolean, optional
         If true, plots points on a logarithmic y axis. Default: True.
     """
-    assert jkset.shape[0] == 1, "Input jkset must have shape[0] == 1."
-    dlys, spectra = jkset.dlys, jkset.spectra[0]
+    assert jkset.ndim == 1, "Input jkset must have ndim == 1."
+    dlys, spectra = jkset.dlys, jkset.spectra
 
     if logscale: spectra = np.abs(spectra)
     
@@ -221,8 +221,8 @@ def hist_2d(jkset, ax=None, ybins=40, display_stats=True,
     logscale: boolean, optional
         If true, plots histogram on a logarithmic y axis. Default: True.
     """
-    assert jkset.shape[0] == 1, "Input jkset must have shape[0] == 1."
-    dlys, spectra = jkset.dlys, jkset.spectra[0]
+    assert jkset.ndim == 1, "Input jkset must have ndim == 1."
+    dlys, spectra = jkset.dlys, jkset.spectra
 
     if ax is None:
         fig = plt.figure(figsize=(12, 6))

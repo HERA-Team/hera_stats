@@ -10,7 +10,7 @@ import copy
 import jkset as jkset_lib
 
 
-def weightedsum(jkset, axis=1):
+def weightedsum(jkset, axis=0):
     """
     Calculates the weighted sum average of the spectra over a specific axis.
 
@@ -39,7 +39,7 @@ def weightedsum(jkset, axis=1):
     jk = copy.deepcopy(jkset)
 
     assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
-    assert axis in [0, 1], "Axis must be either 1 or 0."
+    assert axis < jk.ndim, "Axis must be <= %i." % (jk.ndim - 1)
 
     # Do weighted sum calculation
     aerrs = 1. / np.sum(jk.errs ** -2, axis=axis)
@@ -55,12 +55,18 @@ def weightedsum(jkset, axis=1):
     integrations = np.average(jk.integrations, axis=0)
     times = np.average(jk.times, axis=0)
 
-    uvp_list = copy.deepcopy(jk._uvp_list[0])
+    jkcopy = copy.deepcopy(jk[0])
+    if not isinstance(nsamp, np.ndarray): nsamp = np.array([nsamp])
+    if not isinstance(integrations, np.ndarray): integrations = np.array([integrations])
+    if not isinstance(times, np.ndarray): times = np.array([times])
 
+    if av.ndim == 1:
+        av = av[None]
+        std = std[None]
+
+    jkcopy.set_data(av, std)
     # Set UVPSpec attrs
-    for i, uvp in enumerate(uvp_list):
-        uvp.data_array[0] = np.expand_dims(av[i][None], 2)
-        uvp.stats_array["bootstrap_errs"][0] = np.expand_dims(std[i][None], 2)
+    for i, uvp in enumerate(jkcopy._uvp_list):
 
         uvp.integration_array[0] = integrations[i][None]
         uvp.time_avg_array[0] = times[i][None]
@@ -69,11 +75,9 @@ def weightedsum(jkset, axis=1):
         uvp.nsample_array[0] = nsamp[i][None]
         uvp.labels = np.array(["Weighted Sum"])
 
-    # Create new JKSet
-    uvp_list = np.expand_dims(uvp_list, axis)
-    return jkset_lib.JKSet(uvp_list, "weightedsum")
+    return jkset_lib.JKSet(jkcopy._uvp_list, "weightedsum")
 
-def zscores(jkset, method="weightedsum", axis=1):
+def zscores(jkset, method="weightedsum", axis=0):
     """
     Calculates the z scores for a JKSet along a specified axis. This
     returns another JKSet object, which has the zscore data and errors
@@ -131,7 +135,7 @@ def zscores(jkset, method="weightedsum", axis=1):
     elif method == "varsum":
         assert shape[axis] == 2, "Varsum can only take axes of length 2, got {}.".format(shape[axis])
         comberr = np.sqrt(errs[0]**2 + errs[1]**2).clip(10**-10, np.inf)
-        z = ((spectra[0] - spectra[1])/comberr)[None]
+        z = ((spectra[0] - spectra[1])/comberr)
 
         # Use weightedsum to shrink jkset to size, then replace data
         jkout = weightedsum(jkout, axis=0)
@@ -187,12 +191,12 @@ def kstest(jkset, summary=False, cdf=None, verbose=False):
         The fraction of delay modes that fail the KS test, if summary == True.
     """
     assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
-    assert jkset.shape[0] == 1, "Input jkset must have first dimension 1."
+    assert jkset.ndim == 1, "Input jkset must have 1 dimension."
 
     if cdf == None:
         cdf = spstats.norm(0, 1).cdf
 
-    spectra = jkset.spectra[0]
+    spectra = jkset.spectra
 
     ks_l, pval_l = [], []
     fails = 0.
@@ -206,7 +210,7 @@ def kstest(jkset, summary=False, cdf=None, verbose=False):
 
         if verbose:
             st = ["pass", "fail"][isfailed]
-            print jkset.dlys[i], st
+            print "%.1f, %s" % (jkset.dlys[i], st)
 
     # Return proper data
     if summary == False:
@@ -255,9 +259,9 @@ def anderson(jkset, summary=False, verbose=False):
         The critical values, also returned as a spectrum that can be immediately plotted.
     """
     assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
-    assert jkset.shape[0] == 1, "Input jkset must have first dimension 1."
+    assert jkset.ndim == 1, "Input jkset must have first dimension 1."
 
-    spectra = jkset.spectra[0]
+    spectra = jkset.spectra
 
     # Calculate Anderson statistic and critical values for each delay mode
     stat_l = []

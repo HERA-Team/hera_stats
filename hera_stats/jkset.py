@@ -2,8 +2,8 @@ import numpy as np
 import hera_pspec as hp
 import copy
 
-class JKSet():
-    def __init__(self, pc_uvp, jktype="None"):
+class JKSet(object):
+    def __init__(self, pc_uvp, jktype, error_field="bootstrap_errs"):
         """
         JKSet is a class to handle sets of single spectra outputted by jackknives
         and usable for other purposes. At the core is a list of UVPSpecs with single
@@ -24,12 +24,12 @@ class JKSet():
             whose UVPSpecs are named by the jackknife type. Default: "None".
         """
         if isinstance(pc_uvp, hp.container.PSpecContainer):
-            self._load_pc(pc_uvp, jktype)
+            self._load_pc(pc_uvp, jktype, error_field=error_field)
 
         elif isinstance(pc_uvp, (list, tuple, np.ndarray)):
-            self._load_uvp(pc_uvp, jktype)
+            self._load_uvp(pc_uvp, jktype, error_field=error_field)
 
-    def _load_pc(self, pc, jktype):
+    def _load_pc(self, pc, jktype, error_field="bootstrap_errs"):
         """
         Loads a PSpecContainer.
 
@@ -63,9 +63,9 @@ class JKSet():
                      for i in sorted(refdic[n].keys())]
                     for n in sorted(refdic.keys())]
 
-        self._load_uvp(uvp_list, jktype)
+        self._load_uvp(uvp_list, jktype, error_field)
 
-    def _load_uvp(self, uvp_list, jktype, proj=None, error_field="bootstrap_errs"):
+    def _load_uvp(self, uvp_list, jktype, error_field="bootstrap_errs",proj=None):
         """
         Loads a 2D list of UVPSpecs.
 
@@ -83,54 +83,46 @@ class JKSet():
         setattr(self, "jktype", jktype)
 
         uvp_list = np.array(uvp_list)
-        ndim = uvp_list.ndim
-        assert ndim == 2, "Expected uvp_list to have 2 dimensions, got {}.".format(ndim)
-        assert isinstance(uvp_list[0][0], hp.UVPSpec), "uvp_list must consist of UVPSpecs"
+        assert isinstance(uvp_list.flatten()[0], hp.UVPSpec), "uvp_list must consist of UVPSpecs"
 
         # Indicate which attributes to save
-        to_save = ["spectra", "errs", "grps", "times", "vis_units", "nsamples",
-                   "integrations", "units", "_uvp_list"]
+        attrs  = ["spectra", "errs", "grps", "times", "vis_units", "nsamples",
+                   "integrations", "units", "_uvp_list", "dlys"]
 
-        # Create dictionary of empty array for each attr
-        data = dict([(ts, []) for ts in to_save])
+        load_attr = [lambda uvp: proj(uvp.get_data((0, uvp.get_blpairs()[0], "xx"))[0]),
+                     lambda uvp: uvp.get_stats("bootstrap_errs", (0, uvp.get_blpairs()[0], "xx"))[0],
+                     lambda uvp: uvp.labels,
+                     lambda uvp: uvp.time_avg_array[0],
+                     lambda uvp: uvp.vis_units,
+                     lambda uvp: uvp.nsample_array[0][0],
+                     lambda uvp: uvp.integration_array[0][0],
+                     lambda uvp: uvp.units,
+                     lambda uvp: uvp,
+                     lambda uvp: uvp.get_dlys(0) * 10**9]
 
-        # iterate over uvp_list
-        for uvp_l in uvp_list:
-            # Create another dictionary of empty arrays named by first 3 chars of attr
-            dat_l = dict([(ts[:3], []) for ts in to_save])
+        def map_uvp(func, obj):
+            if isinstance(obj, hp.UVPSpec):
+                return func(obj)
+            elif isinstance(obj, (list, np.ndarray)):
+                return np.array([map_uvp(func, ob) for ob in obj])
 
-            for uvp in uvp_l:
-                # get delays, spectra, errors.
-                dlys = uvp.get_dlys(0) * 10**9
-                key = uvp.get_all_keys()[0]
-                avspec = proj(uvp.get_data(key)[0])
-                errspec = proj(uvp.get_stats(error_field, key)[0])
-
-                # Set saved values with list comprehension, should be same order as to_save names.
-                to_save_vals = [avspec, errspec, list(uvp.labels),
-                                uvp.time_avg_array[0], uvp.vis_units,
-                                uvp.nsample_array[0][0], uvp.integration_array[0][0],
-                                uvp.units, uvp]
-
-                # Save first to small dictionary
-                [dat_l[to_save[i][:3]].append(to_save_vals[i]) for i in range(len(to_save))]
-
-            # Save to larger dictionary
-            [data[ts].append(dat_l[ts[:3]]) for ts in to_save]
+        dic = dict([(attrs[i], map_uvp(load_attr[i], uvp_list)) for i in range(len(attrs))])    
 
         # Set class metadata
         for meta in ["units", "vis_units"]:
-            val = np.unique(data[meta])
+            val = np.unique(dic[meta])
             assert len(val) == 1, "Got {} different values for {}, expected 1.".format(len(val), meta)
             setattr(self, meta, val[0])
 
         # Set class arrays
         for dset in ["spectra", "errs", "grps", "times", "nsamples",
-                    "integrations", "_uvp_list"]:
-            setattr(self, dset, np.array(data[dset]))
+                    "integrations", "_uvp_list", "dlys"]:
+            setattr(self, dset, dic[dset])
 
-        self.dlys = dlys
+        key = tuple([0] * (self.dlys.ndim - 1) + [slice(None, None, 1)])
+        self.dlys = self.dlys[key]
         self.shape = self._uvp_list.shape
+        self.ndim = self._uvp_list.ndim
         self._validate()
 
     def __getitem__(self, key):
@@ -140,11 +132,9 @@ class JKSet():
         # Let numpy handle the indexing
         new_uvp = self._uvp_list[key]
 
-        # Make 2D if not already 2d.
+        # Make array if not already
         if isinstance(new_uvp, hp.UVPSpec):
-            new_uvp = np.array([[new_uvp]])
-        if new_uvp.ndim == 1:
-            new_uvp = new_uvp[None]
+            new_uvp = np.array([new_uvp])
 
         # Create new JKSet with sliced uvp_list
         newjk = JKSet(new_uvp, self.jktype)
@@ -203,9 +193,11 @@ class JKSet():
         new_jkset: JKSet
             If inplace == False, returns a jkset with spectra of both this class and jkset2
         """
-        # Test shape to see if stackable
-        assert axis in [0, 1], "axis must either be 1 or 0."
-        assert self.shape[not axis] == jkset2.shape[not axis], "jksets don't match shape in dimension {}.".format(not axis)
+        if self.ndim != 1:
+            # Test shape to see if stackable
+            assert axis < self.ndim,"axis outside of range (axis <= %i)." % (self.ndim - 1)
+            otheraxes = np.arange(self.ndim) != axis
+            assert all([self.shape[a] == jkset2.shape[a] for a in otheraxes]), "Axes other than the one specified must match."
 
         # Vstack or hstack uvp lists
         if axis == 1:
@@ -234,8 +226,8 @@ class JKSet():
         """
         # Check is spectra and errors have same first 2 dimensions as class
         msg = "First two axes of {} {} and {} {} must match."
-        assert spectra.shape[:2] == self.shape, msg.format("spectra", spectra.shape, "this JKSet", self.shape)
-        assert errs.shape[:2] == self.shape, msg.format("errs", errs.shape,"this JKSet", self.shape)
+        assert spectra.shape[:self.ndim] == self.shape, msg.format("spectra", spectra.shape, "this JKSet", self.shape)
+        assert errs.shape[:self.ndim] == self.shape, msg.format("errs", errs.shape,"this JKSet", self.shape)
 
         # Check is spectra shape matches errors shape
         msg = "Shape of {} {} and {} {} must match exactly."
@@ -244,17 +236,21 @@ class JKSet():
         # Check if number of delays is consistent
         msg = "Number of class delay modes {} must the number of delay modes for {} ({})"
         ndlys = len(self.dlys)
-        assert spectra.shape[2] == ndlys, msg.format(ndlys, "spectra", spectra.shape[2])
-        assert errs.shape[2] == ndlys, msg.format(ndlys, "spectra", errs.shape[2])
+        assert spectra.shape[self.ndim] == ndlys, msg.format(ndlys, "spectra", spectra.shape[self.ndim])
+        assert errs.shape[self.ndim] == ndlys, msg.format(ndlys, "spectra", errs.shape[self.ndim])
 
-        # Copy uvp_list and set spectra and errors
-        uvp_list = copy.deepcopy(self._uvp_list)
-        for i in range(self.shape[0]):
-            for j in range(self.shape[1]):
-                uvp = uvp_list[i][j]
-                uvp.data_array[0] = np.expand_dims(spectra[i][j][None], 2)
-                uvp.stats_array["bootstrap_errs"][0] = np.expand_dims(errs[i][j][None], 2)
+        # Recursive function for setting spectra and errors.
+        def recursive_set(obj, spectra, errs):
+            if isinstance(obj, hp.UVPSpec):
+                obj.data_array[0] = np.expand_dims(spectra[None], 2)
+                obj.stats_array["bootstrap_errs"][0] = np.expand_dims(errs[None], 2)
+                return obj
+            elif isinstance(obj, (list, np.ndarray)):
+                return np.array([recursive_set(obj[i], spectra[i], errs[i]) for i in range(len(obj))])
 
+        # Recursicely set data and load the new uvp_list
+        uvpl = copy.deepcopy(self._uvp_list)
+        uvp_list = recursive_set(uvpl, spectra, errs)
         self._load_uvp(uvp_list, self.jktype)
 
     def flatten(self):
@@ -266,7 +262,7 @@ class JKSet():
         jkset: JKSet
             New jkset that has been flattened.
         """
-        return JKSet(self._uvp_list.flatten()[None], self.jktype)
+        return JKSet(self._uvp_list.flatten(), self.jktype)
 
     def reshape(self, *args):
         """
@@ -296,6 +292,8 @@ class JKSet():
         """
         shape = self.shape
 
+        assert self.ndim <= 2, "Cannot take more than 2 dimensions."
+
         # See if all arrays have same first two dimensions.
         for attr in ["spectra", "errs", "nsamples", "times",
                      "integrations", "grps"]:
@@ -303,17 +301,34 @@ class JKSet():
             array = getattr(self, attr)
             assert isinstance(array, (list, tuple, np.ndarray)), "{} must be an array".format(attr)
             msg =  "Shape of {} {} does not match class shape {}.".format(attr, array.shape, shape)
-            assert array.shape[:2] == shape, msg
+            assert array.shape[:self.ndim] == shape, msg
 
         # Check is delay modes are consistent
         for spec_like in ["spectra", "errs"]:
             array = getattr(self, spec_like)
-            assert array.shape[2] == len(self.dlys), "{} ({}) and dlys ({}) have a different number of delay modes.".format(spec_like, array.shape[2], len(self.dlys))
+            assert array.shape[self.ndim] == len(self.dlys), "{} ({}) and dlys ({}) have a different number of delay modes.".format(spec_like, array.shape[self.ndim], len(self.dlys))
 
         # Check jackknife type
         assert isinstance(self.jktype, str), "Expected jktype to be string, got {}".format(type(self.jktype.__name__))
 
-        # Check that units match
+        # Check that units are valid
         for attr in ["units", "vis_units", "jktype"]:
             val = getattr(self, attr)
             assert isinstance(val, (str, np.str)), "Expected meta attribute {} to be string.".format(attr)
+
+def peek(pc):
+    assert isinstance(pc, hp.container.PSpecContainer)
+
+    # Load spectra labels
+    sp = pc.spectra("jackknives")
+    sp = np.array([s.split(".") for s in sp])
+
+    # Extract jackknife ypes and array shapes
+    jktypes = np.unique(sp[:, 0])
+    nj = [sum(sp[:, 0] == jkt) for jkt in jktypes]
+    n = [sum((sp[:, 0] == jkt) * (sp[:, 1] == "0")) for jkt in jktypes]
+    shapes = [(nj[i]/n[i], n[i]) for i in range(len(n))]
+
+    for shp, jkt in zip(shapes, jktypes):
+        print "%s:" % jkt
+        print "   shape: %s" % str(shp)
