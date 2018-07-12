@@ -90,7 +90,7 @@ class JKSet(object):
                    "integrations", "units", "_uvp_list", "dlys"]
 
         load_attr = [lambda uvp: proj(uvp.get_data((0, uvp.get_blpairs()[0], "xx"))[0]),
-                     lambda uvp: uvp.get_stats("bootstrap_errs", (0, uvp.get_blpairs()[0], "xx"))[0],
+                     lambda uvp: proj(uvp.get_stats("bootstrap_errs", (0, uvp.get_blpairs()[0], "xx"))[0]),
                      lambda uvp: uvp.labels,
                      lambda uvp: uvp.time_avg_array[0],
                      lambda uvp: uvp.vis_units,

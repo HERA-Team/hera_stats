@@ -139,6 +139,8 @@ def zscores(jkset, method="weightedsum", axis=0):
 
         # Use weightedsum to shrink jkset to size, then replace data
         jkout = weightedsum(jkout, axis=0)
+        if jkout.shape == (1,):
+            z = z[None]
         jkout.set_data(z, 0*z)
 
     else:
