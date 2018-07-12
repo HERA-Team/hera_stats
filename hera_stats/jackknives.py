@@ -5,7 +5,6 @@ import copy
 import os
 import utils
 import astropy.coordinates as cp
-import time
 
 def _bootstrap_single_uvp(uvp, pol, blpairs=None, n_boots=40):
     
@@ -188,6 +187,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         List of hera_pspec.UVPSpec objects that have been split
         accordingly.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -197,7 +198,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         assert isinstance(uvp, hp.UVPSpec), "Expected uvp to be list or UVPSpec, not {}".format(type(uvp).__name__)
 
     # Load all baselines in uvp
-    blns = map(uvp.bl_to_antnums, uvp.bl_array)
+    bl_array = np.unique([uvp.antnums_to_bl(bl) for blp in uvp.get_blpairs() for bl in blp])
+    blns = map(uvp.bl_to_antnums, bl_array)
     ants = np.unique(blns)
 
     groups = []
@@ -271,6 +273,8 @@ def stripe_times(uvp, period=None, verbose=False):
     uvpl: list
         List of UVPSpecData objects split accordingly.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, list):
         if len(uvp) > 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -306,8 +310,8 @@ def stripe_times(uvp, period=None, verbose=False):
         [uvp1, uvp2] = [uvp.select(times=t, inplace=False) for t in [t1, t2]]
 
         # Set metadata
-        uvp1.labels = "Period %.2f sec Even" % per
-        uvp2.labels = "Period %.2f sec Odd" % per
+        uvp1.labels = np.array(["Period %.2f sec Even" % per])
+        uvp2.labels = np.array(["Period %.2f sec Odd" % per])
         uvp1.jktype = "stripe_times"
         uvp2.jktype = "stripe_times"
         uvpl.append([uvp1,uvp2])
@@ -338,6 +342,8 @@ def split_gha(uvp, bins_list, specify_bins=False):
     uvpl: list of UVPSpec pairs
         The resulting data, one list per jackknife.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, list):
         if len(uvp) > 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -383,7 +389,13 @@ def split_gha(uvp, bins_list, specify_bins=False):
 
             # Set metadata
             _uvp.jktype = "spl_gha"
-            _uvp.labels = np.array([np.average(gha.l.deg[val])])
+            angs = gha.l.deg[val]
+            angs_180 = (angs + 180) % 360
+            if np.std(angs) <= np.std(angs_180):
+                _uvp.labels = np.array([np.average(angs)])
+            else:
+                _uvp.labels = np.array([(np.average(angs_180) - 180) % 360])
+
             inrange.append(_uvp)
 
         uvpl.append(inrange)
@@ -406,6 +418,8 @@ def omit_ants(uvp, ant_nums=None):
         A list containing one list of UVPSpecs, with one for every ant_num
         specified.
     """
+    uvp = copy.deepcopy(uvp)
+
     # Check if uvp is valid and combine list.
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
@@ -419,7 +433,7 @@ def omit_ants(uvp, ant_nums=None):
     elif isinstance(ant_nums, int):
         ant_nums = [ant_nums]
     elif ant_nums == None:
-        ant_nums = np.unique([uvp.bl_to_antnums(b) for b in uvp.bl_array])
+        ant_nums = np.unique(uvp.get_blpairs())
     else:
         raise AssertionError("Expected ant_nums to be list or int, not {}".format(type(ant_nums).__name__))
 
@@ -455,6 +469,8 @@ def sep_files(uvp, filenames):
     """
     Calculates pspec on individual files.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, hp.UVPSpec):
         uvp = [uvp]
     assert isinstance(uvp, (list, tuple, np.ndarray)), "uvp must be a list."
