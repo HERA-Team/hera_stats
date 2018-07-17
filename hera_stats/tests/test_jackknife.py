@@ -12,20 +12,10 @@ class Test_Jackknife():
 
     def setUp(self):
 
-        self.filepath = os.path.join(DATA_PATH,"gaussian.N18.xx.sim/")
-        self.beampath = os.path.join(DATA_PATH, "HERA_NF_dipole_power.beamfits")
-
-        uvd = UVData()
-        uvd.read_miriad(self.filepath)
-        cosmo = hp.conversions.Cosmo_Conversions()
-        beam = hp.PSpecBeamUV(self.beampath, cosmo=cosmo)
-        ds = hp.PSpecData([uvd, uvd], [None, None], beam=beam)
-        blpairs = [p for p in uvd.get_antpairs() if p[0]+1 == p[1]]
-        bsl1, bsl2, blpairs = hp.utils.construct_blpairs(blpairs,
-                                                         exclude_auto_bls=True,
-                                                         exclude_permutations=True)
-        self.uvp = ds.pspec(bsl1, bsl2, (0,1), ("XX", "XX"), spw_ranges=[(600,610)], verbose=False)
-
+        self.filepath = os.path.join(DATA_PATH, "uvp_data.h5")
+        pc = hp.container.PSpecContainer(self.filepath)
+        self.uvp = pc.get_pspec("IDR2_1")[0]
+        self.uvp_list = pc.get_pspec("IDR2_1")[0]
 
     def test_bootstrap_and_save(self):
 
@@ -34,10 +24,10 @@ class Test_Jackknife():
         uvpl = hs.jackknives.split_ants(uvp, 1)
         uvplb = hs.jackknives.bootstrap_jackknife(uvpl, "xx")
 
-        pc = hs.PSpecContainer("./test", "rw")
+        pc = hs.PSpecContainer("./test_save_jackknife", "rw")
         hs.jackknives.save_jackknife(pc, uvplb)
 
-        os.system("rm -f ./test*")
+        os.system("rm -f ./test_save_jackknife")
 
     def test_split_ants(self):
 
@@ -69,3 +59,7 @@ class Test_Jackknife():
         uvp = hs.jackknives.omit_ants([self.uvp], 1)
         
 
+    def test_sep_files(self):
+
+        sep = hs.jackknives.sep_files(self.uvp_list, ["f1", "f2"])
+        

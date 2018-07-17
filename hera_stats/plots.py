@@ -7,7 +7,7 @@ import utils
 
 
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
-                 method="weightedsum", zlim=5, logscale=True):
+                 z_method="weightedsum", zlim=5, logscale=True):
     """
     Plots a pair of spectra, their errors, and normalized residuals.
 
@@ -26,7 +26,7 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
     with_errors: boolean, optional
         If true, plots errorbars and zscores.
 
-    method: string, optional
+    z_method: string, optional
         The method to use for calculating and displaying zscores. Default: weightedsum.
 
     zlim: int or float, optional
@@ -76,7 +76,7 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
     ax.grid(True)
 
     # Set other details
-    if len(p_l) < 10 and show_groups is True:
+    if len(p_l) < 10:
         ax.legend(p_l, labels, fontsize=8, loc=1)
     ax.set_title("Power Spectrum")
 
@@ -85,7 +85,7 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
         ax2 = fig.add_axes([0.1, 0.1, 0.8, 0.2])
 
         # plot z scores as scatterplot
-        zs = stats.zscores(jkset, method=method)
+        zs = stats.zscores(jkset, z_method=z_method)
         [ax2.scatter(zs.dlys, z, marker="+", color="green") for z in zs.spectra]
         xlims = ax.get_xlim()
 

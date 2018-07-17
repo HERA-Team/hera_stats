@@ -23,11 +23,16 @@ class JKSet(object):
             jktype must be specified. It is used to extract data from the container,
             whose UVPSpecs are named by the jackknife type. Default: "None".
         """
+        # Load PSpecContainer
         if isinstance(pc_uvp, hp.container.PSpecContainer):
             self._load_pc(pc_uvp, jktype, error_field=error_field)
 
+        # Or, load UVPSpec array or list
         elif isinstance(pc_uvp, (list, tuple, np.ndarray)):
             self._load_uvp(pc_uvp, jktype, error_field=error_field)
+
+        else:
+            raise AssertionError("Expected pc_uvp to be either a PSpecContainer or a list, got %s." % type(pc_uvp).__name__)
 
     def _load_pc(self, pc, jktype, error_field="bootstrap_errs"):
         """
@@ -40,6 +45,11 @@ class JKSet(object):
 
         jktype: string
             Jackknife type to look for inside the container.
+
+        error_field: string
+            The error field of the UVPSpec stats_array from which to
+            load errors. Default: "bootstrap_errs" (which is set by
+            bootstrap_jackknife in hera_stats.jackknife).
         """
         # Get jackknife name data
         jkf_strs = pc.spectra("jackknives")
@@ -53,10 +63,10 @@ class JKSet(object):
         # Create dictionary so that the indices can be sorted while still maintaining
         # the correct spectra
         refdic = {}
-        jkf_groups = [[int(a[1]), int(a[2][3:])] for a in all_jkfs]
+        jkf_groups = [[int(a[1]), int(a[2])] for a in all_jkfs]
         for n, i in jkf_groups:
             if n not in refdic.keys(): refdic[n] = {}
-            refdic[n][i] = jktype + "." + str(n) + ".grp" + str(i)
+            refdic[n][i] = jktype + "." + str(n) + "." + str(i)
 
         # Load UVPSpecs to 2d list
         uvp_list = [[pc.get_pspec("jackknives", refdic[n][i])
@@ -65,7 +75,7 @@ class JKSet(object):
 
         self._load_uvp(uvp_list, jktype, error_field)
 
-    def _load_uvp(self, uvp_list, jktype, error_field="bootstrap_errs",proj=None):
+    def _load_uvp(self, uvp_list, jktype, error_field="bootstrap_errs", proj=None):
         """
         Loads a 2D list of UVPSpecs.
 
@@ -76,6 +86,15 @@ class JKSet(object):
 
         jktype: string
             String that indicates the jackknife type.
+
+        error_field: string, optional
+            The error field of the UVPSpec stats_array from which to
+            load errors. Default: "bootstrap_errs" (which is set by
+            bootstrap_jackknife in hera_stats.jackknife).
+
+        proj: function, optional
+            In development, can specify how to project the data when loading it.
+            If None, sets to lambda x: x.real. Default: None.
         """
         if proj == None:
             proj = lambda x: x.real
@@ -89,6 +108,7 @@ class JKSet(object):
         attrs  = ["spectra", "errs", "grps", "times", "vis_units", "nsamples",
                    "integrations", "units", "_uvp_list", "dlys"]
 
+        # Functions used to get attrs and arrays.
         load_attr = [lambda uvp: proj(uvp.get_data((0, uvp.get_blpairs()[0], "xx"))[0]),
                      lambda uvp: proj(uvp.get_stats("bootstrap_errs", (0, uvp.get_blpairs()[0], "xx"))[0]),
                      lambda uvp: uvp.labels,
@@ -100,16 +120,20 @@ class JKSet(object):
                      lambda uvp: uvp,
                      lambda uvp: uvp.get_dlys(0) * 10**9]
 
+        # Create recursion function
         def map_uvp(func, obj):
             if isinstance(obj, hp.UVPSpec):
                 return func(obj)
             elif isinstance(obj, (list, np.ndarray)):
                 return np.array([map_uvp(func, ob) for ob in obj])
 
+        # Recursively applies a function of load_attr to uvp_list.
+        # Sets resulting array as element of dictionary with attrs as name.
         dic = dict([(attrs[i], map_uvp(load_attr[i], uvp_list)) for i in range(len(attrs))])    
 
         # Set class metadata
         for meta in ["units", "vis_units"]:
+            # Make sure all values are the same and set attribute
             val = np.unique(dic[meta])
             assert len(val) == 1, "Got {} different values for {}, expected 1.".format(len(val), meta)
             setattr(self, meta, val[0])
@@ -119,10 +143,12 @@ class JKSet(object):
                     "integrations", "_uvp_list", "dlys"]:
             setattr(self, dset, dic[dset])
 
+        # Set more metadata
         key = tuple([0] * (self.dlys.ndim - 1) + [slice(None, None, 1)])
         self.dlys = self.dlys[key]
         self.shape = self._uvp_list.shape
         self.ndim = self._uvp_list.ndim
+        self._error_field = error_field
         self._validate()
 
     def __getitem__(self, key):
@@ -132,12 +158,12 @@ class JKSet(object):
         # Let numpy handle the indexing
         new_uvp = self._uvp_list[key]
 
-        # Make array if not already
+        # Make array if index happens to shrink list down to single UVPSpec
         if isinstance(new_uvp, hp.UVPSpec):
             new_uvp = np.array([new_uvp])
 
         # Create new JKSet with sliced uvp_list
-        newjk = JKSet(new_uvp, self.jktype)
+        newjk = JKSet(new_uvp, self.jktype, self._error_field)
         return newjk
 
     def __repr__(self):
@@ -156,7 +182,7 @@ class JKSet(object):
     
     def __eq__(self, jk2, just_meta=False):
         """
-        Handles ==
+        Handles "=="
         """
         # Validate both data sets
         self._validate(), jk2._validate()
@@ -207,9 +233,9 @@ class JKSet(object):
 
         # Return or set data
         if inplace:
-            self._load_uvp(new_uvp)
+            self._load_uvp(new_uvp, self.jktype, self._error_field)
         else:
-            return JKSet(new_uvp, self.jktype)
+            return JKSet(new_uvp, self.jktype, self._error_field)
 
     def set_data(self, spectra, errs):
         """
@@ -251,7 +277,7 @@ class JKSet(object):
         # Recursicely set data and load the new uvp_list
         uvpl = copy.deepcopy(self._uvp_list)
         uvp_list = recursive_set(uvpl, spectra, errs)
-        self._load_uvp(uvp_list, self.jktype)
+        self._load_uvp(uvp_list, self.jktype, self._error_field)
 
     def flatten(self):
         """
@@ -262,7 +288,7 @@ class JKSet(object):
         jkset: JKSet
             New jkset that has been flattened.
         """
-        return JKSet(self._uvp_list.flatten(), self.jktype)
+        return JKSet(self._uvp_list.flatten(), self.jktype, self._error_field)
 
     def reshape(self, *args):
         """
@@ -273,7 +299,7 @@ class JKSet(object):
         jkset: JKSet
             New jkset in the shape specified.
         """
-        return JKSet(self._uvp_list.reshape(*args), self.jktype)
+        return JKSet(self._uvp_list.reshape(*args), self.jktype, self._error_field)
 
     def T(self):
         """
@@ -284,7 +310,7 @@ class JKSet(object):
         jkset: JKSet
             The transposed JKSet.
         """
-        return JKSet(self._uvp_list.T, self.jktype)
+        return JKSet(self._uvp_list.T, self.jktype, self._error_field)
 
     def _validate(self):
         """
@@ -317,10 +343,21 @@ class JKSet(object):
             assert isinstance(val, (str, np.str)), "Expected meta attribute {} to be string.".format(attr)
 
 def peek(pc):
+    """
+    Lists the jackknife types and shapes in a PSpecContainer
+    
+    Parameters
+    ----------
+    pc: hera_pspec.container.PSpecContainer
+        A PSpecContainer to peek into.
+    """
     assert isinstance(pc, hp.container.PSpecContainer)
 
     # Load spectra labels
-    sp = pc.spectra("jackknives")
+    try:
+        sp = pc.spectra("jackknives")
+    except:
+        print "No jackknives found in PSpecContainer"
     sp = np.array([s.split(".") for s in sp])
 
     # Extract jackknife ypes and array shapes

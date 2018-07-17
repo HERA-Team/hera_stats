@@ -29,45 +29,51 @@ def weightedsum(jkset, axis=0):
         JKSet with which to perform the weighted sum.
 
     axis: int, 0 or 1, optional
-        Axis along which to do the weighted sum. Default: 1.
+        Axis along which to do the weighted sum. Default: all axes.
 
     Returns
     -------
-    jkset_avg: JKSet
-        The average jkset, with errors that describe the standard deviation of the samples given.
+    jkset_avg: 1D JKSet
+        The average jkset, with errors that describe the standard deviation
+        of the samples given.
     """
     jk = copy.deepcopy(jkset)
 
+    if isinstance(axis, int): axis = (axis,)
     assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
-    assert axis < jk.ndim, "Axis must be <= %i." % (jk.ndim - 1)
+    assert all([ax < jk.ndim for ax in axis]), "Axes %s was specified butn jkset has only axes <= %i." % (axis, jk.ndim - 1)
 
     # Do weighted sum calculation
     aerrs = 1. / np.sum(jk.errs ** -2, axis=axis)
     av = aerrs * np.sum(jk.spectra * jk.errs**-2, axis=axis)
     std = (aerrs * len(jkset.spectra)) ** 0.5
-    
-    # Transpose jkset if necessary
-    if axis == 1:
-        jk = jk.T()
 
     # Average or sum metadata
-    nsamp = np.sum(jk.nsamples, axis=0)
-    integrations = np.average(jk.integrations, axis=0)
-    times = np.average(jk.times, axis=0)
+    nsamp = np.sum(jk.nsamples, axis=axis)
+    integrations = np.average(jk.integrations, axis=axis)
+    times = np.average(jk.times, axis=axis)
 
-    jkcopy = copy.deepcopy(jk[0])
-    if not isinstance(nsamp, np.ndarray): nsamp = np.array([nsamp])
-    if not isinstance(integrations, np.ndarray): integrations = np.array([integrations])
-    if not isinstance(times, np.ndarray): times = np.array([times])
-
-    if av.ndim == 1:
+    # IF the spectra were averaged down to a single spectrum, of shape (Ndlys,), expand to (1, Ndlys).
+    if len(av.shape[:-1]) == 0:
+        targ_shape = (1, )
         av = av[None]
         std = std[None]
+        nsamp = nsamp[None]
+        integrations = integrations[None]
+        times = times[None]
 
-    jkcopy.set_data(av, std)
+    # Slice jk to match shape of av and std
+    key = [0] * jk.ndim
+    for i in range(jk.ndim):
+        if i not in axis:
+            key[i] = slice(None, None, 1)
+    jkav = jk[tuple(key)]
+
+    # Set average and error of jk
+    jkav.set_data(av, std)
+
     # Set UVPSpec attrs
-    for i, uvp in enumerate(jkcopy._uvp_list):
-
+    for i, uvp in enumerate(jkav._uvp_list):
         uvp.integration_array[0] = integrations[i][None]
         uvp.time_avg_array[0] = times[i][None]
         uvp.time_1_array[0] = times[i][None]
@@ -75,9 +81,9 @@ def weightedsum(jkset, axis=0):
         uvp.nsample_array[0] = nsamp[i][None]
         uvp.labels = np.array(["Weighted Sum"])
 
-    return jkset_lib.JKSet(jkcopy._uvp_list, "weightedsum")
+    return jkav
 
-def zscores(jkset, method="weightedsum", axis=0):
+def zscores(jkset, z_method="weightedsum", axis=0):
     """
     Calculates the z scores for a JKSet along a specified axis. This
     returns another JKSet object, which has the zscore data and errors
@@ -88,16 +94,16 @@ def zscores(jkset, method="weightedsum", axis=0):
     jkset: hera_stats.jkset.JKSet
         The jackknife set to use for calculating zscores.
 
-    method: string, optional
+    z_method: string, optional
         Method used to calculate z-scores. 
         Options: ["varsum", "weightedsum"]. Default: varsum.
         
-        "Varsum" works only with two
+        "varsum" works only with two
         jackknife groups, and the standard deviation is calculated by:
         
         zscore = (x1 - x2) / sqrt(err1**2 + err2**2)
         
-        Method "weightedsum" works for any number of spectra and
+        "weightedsum" works for any number of spectra and
         calculates the weighted mean with stats.weightedsum, then
         calculates zscores like this:
         
@@ -110,12 +116,13 @@ def zscores(jkset, method="weightedsum", axis=0):
     """
     assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
 
-    shape = jkset.shape
-    assert axis in [0, 1], "Axis must be either 0 or 1."
-    assert shape[axis] >= 2, "Need at least two spectra."
+    if isinstance(axis, int): axis = (axis, )
+    assert all([ax < jkset.ndim for ax in axis]), "Axes %s was specified butn jkset has only axes <= %i." % (axis, jkset.ndim - 1)
 
-    if axis == 1:
-        jkset = jkset.T()
+    spectra = jkset.spectra
+    errs = jkset.errs
+
+    jkout = copy.deepcopy(jkset)
 
     spectra = jkset.spectra
     errs = jkset.errs
@@ -123,33 +130,45 @@ def zscores(jkset, method="weightedsum", axis=0):
     jkout = copy.deepcopy(jkset)
 
     # Or Calculate z scores with weighted sum
-    if method == "weightedsum":
+    if z_method == "weightedsum":
         # Calculate weighted average and standard deviation.
-        aerrs = 1. / np.sum(errs ** -2, axis=0)
-        av = aerrs * np.sum(spectra * errs**-2, axis=0)
-        std = np.sqrt(aerrs * len(spectra))
-        z = np.array([(spec - av)/(std) for spec in spectra])
+        aerrs = 1. / np.sum(errs ** -2, axis=axis)
+        av = aerrs * np.sum(spectra * errs**-2, axis=axis)
+        N = [spectra.shape[ax] for ax in axis]
+        std = np.sqrt(aerrs * reduce(lambda x,y: x*y, N))
+        if len(axis) == 1:
+            av = np.expand_dims(av, axis[0])
+            std = np.expand_dims(std, axis[0])
+
+        z = (spectra - av)/(std)
         jkout.set_data(z, 0*z)
 
     # Calculate z scores using sum of variances
-    elif method == "varsum":
-        assert shape[axis] == 2, "Varsum can only take axes of length 2, got {}.".format(shape[axis])
-        comberr = np.sqrt(errs[0]**2 + errs[1]**2).clip(10**-10, np.inf)
-        z = ((spectra[0] - spectra[1])/comberr)
+    elif z_method == "varsum":
+        assert len(axis) == 1, "Varsum can only work over one axis."
+        assert jkout.shape[axis[0]] == 2, "Varsum can only take axes of length 2, got {}.".format(jkout.shape[axis[0]])
+
+        # Make keys for 2 datasets, slicing into 2 groups along specified axes
+        key1 = [slice(None, None, 1)] * jkout.ndim
+        key1[axis[0]] = 0
+        key2 = copy.deepcopy(key1)
+        key2[axis[0]] = 1
+
+        # Calculate combined error and sum of zscores
+        comberr = np.sqrt(errs[key1]**2 + errs[key2]**2).clip(10**-10, np.inf)
+        z = ((spectra[key1] - spectra[key2])/comberr)
 
         # Use weightedsum to shrink jkset to size, then replace data
-        jkout = weightedsum(jkout, axis=0)
-        if jkout.shape == (1,):
-            z = z[None]
+        jkout = weightedsum(jkout, axis=axis)
+        #print jkout.shape, z.shape
         jkout.set_data(z, 0*z)
-
     else:
         raise NameError("Z-score calculation method not recognized")
 
     if axis == 1:
         jkout = jkout.T()
 
-    jkout.jktype = "zscore_%s" % method
+    jkout.jktype = "zscore_%s" % z_method
     return jkout
 
 def kstest(jkset, summary=False, cdf=None, verbose=False):
@@ -164,8 +183,8 @@ def kstest(jkset, summary=False, cdf=None, verbose=False):
 
     Parameters
     ----------
-    jkset: hera_stats.jkset.JKSet
-        The jackknife set to use for running the ks test. Must have shape[0] == 1.
+    jkset: hera_stats.jkset.JKSet, ndim=1
+        The jackknife set to use for running the ks test.
 
     summary: boolean, optional
         If true, returns the overall failure rate. Otherwise, returns
@@ -233,9 +252,8 @@ def anderson(jkset, summary=False, verbose=False):
 
     Parameters
     ----------
-    jkset: hera_stats.jkset.JKSet
+    jkset: hera_stats.jkset.JKSet, ndim=1
         The jackknife set to use for running the anderson darling test.
-        Must have shape[0] == 1.
 
     summary: boolean, optional
         If true, returns only the confidence intervals and the failure rates.

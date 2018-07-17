@@ -12,12 +12,12 @@ warnings.simplefilter("ignore", matplotlib.mplDeprecation)
 class Test_Plots():
 
     def setUp(self):
-        filepath = os.path.join(DATA_PATH, "test_pc_jackknife.h5")
+        filepath = os.path.join(DATA_PATH, "uvp_jackknife.h5")
         plt.ioff()
 
         pc = hp.container.PSpecContainer(filepath)
         self.jkset = hs.JKSet(pc, "spl_ants")
-        self.zscores = hs.stats.zscores(self.jkset, method="varsum").T()
+        self.zscores = hs.stats.zscores(self.jkset, axis=1, z_method="varsum").T()
 
     def test_plot_spectra(self):
 
