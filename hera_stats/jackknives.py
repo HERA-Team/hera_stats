@@ -156,13 +156,15 @@ def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
         assert isinstance(set_jktype, str), "set_jktype must be a string."
         jktype = set_jktype
 
+    _del_jackknife(pc, jktype)
+
     for i, uvp_pair in enumerate(uvp_list):
         jkf = "jackknives"
         for k, uvp in enumerate(uvp_pair):
             # Save pspec to group 
             uvp.label_1_array = np.array([0])
             uvp.label_2_array = np.array([0])
-            name = "{}.{}.grp{}".format(jktype, i, k)
+            name = "{}.{}.{}".format(jktype, i, k)
             pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
 def split_ants(uvp, n_jacks=40, verbose=False):
@@ -318,7 +320,7 @@ def stripe_times(uvp, period=None, verbose=False):
 
     return uvpl
 
-def split_gha(uvp, bins_list, specify_bins=False):
+def split_gha(uvp, bins_list, specify_bins=False, bls=None):
     """
     Splits based on the galactic hour-angle at the time of measurement.
 
@@ -336,6 +338,10 @@ def split_gha(uvp, bins_list, specify_bins=False):
     specify_bins: boolean
         If true, allows bins_list to be specified as a list of the bins themselves.
         Default: False
+
+    bls: list of tuples, optional
+        The baselines to use in in omitting antenna. If None, uses all
+        baselines. Default: None.
 
     Returns
     -------
@@ -355,6 +361,9 @@ def split_gha(uvp, bins_list, specify_bins=False):
         assert np.asarray(bins_list).ndim == 2, "Expected bins to be a list of lists."
     else:
         assert np.asarray(bins_list).ndim == 1, "Expected bins to be a list of antenna numbers."
+
+    if bls is not None:
+        uvp.select(bls=bls, inplace=True)
 
     # Create reference lst -> time_avg dictionary (for sorting).
     ref = dict(zip(uvp.lst_avg_array, uvp.time_avg_array))
@@ -401,16 +410,20 @@ def split_gha(uvp, bins_list, specify_bins=False):
         uvpl.append(inrange)
     return uvpl
 
-def omit_ants(uvp, ant_nums=None):
+def omit_ants(uvp, ant_nums=None, bls=None):
     """
     Splits UVPSpecs into groups, omitting one antenna from each.
 
     uvp: UVPSpec or list
         Single UVPSpec or list of UVPSpecs to use in splitting.
 
-    ant_nums: list
+    ant_nums: list, optional
         A list containing integers, each entry will generate one UVPSpec
         which does not contain the antenna specified.
+
+    bls: list of tuples, optional
+        The baselines to use in in omitting antenna. If None, uses all
+        baselines. Default: None.
 
     Returns
     -------
@@ -420,7 +433,7 @@ def omit_ants(uvp, ant_nums=None):
     """
     uvp = copy.deepcopy(uvp)
 
-    # Check if uvp is valid and combine list.
+    # Check if uvp is individual UVPSpec. If not, combine list.
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -439,10 +452,13 @@ def omit_ants(uvp, ant_nums=None):
 
     assert isinstance(uvp, hp.UVPSpec), "Expected uvp to be hera_pspec.UVPSpec, not {}".format(type(uvp).__name__)
 
-    blpairs = uvp.get_blpairs()
+    if bls is None:
+        # Get all baseline pairs
+        blpairs = uvp.get_blpairs()
 
-    bls = []
-    [[bls.append(b) for b in blp if b not in bls] for blp in blpairs]
+        # Find unique baselines
+        bls = []
+        [[bls.append(b) for b in blp if b not in bls] for blp in blpairs]
 
     unique_ants = np.unique(bls)
     bl_list = []
@@ -467,7 +483,20 @@ def omit_ants(uvp, ant_nums=None):
 
 def sep_files(uvp, filenames):
     """
-    Calculates pspec on individual files.
+    Keeps files separate, each one having it's own UVPSpec, but formats them for jkset.
+
+    Parameters
+    ----------
+    uvp: UVPSpec or list of UVPSpecs
+        One uvpspec loaded from each individual file
+
+    filenames: list of strings
+        The filenames corresponding to UVPSpecs in the same position.
+
+    Returns
+    -------
+    uvp_list: list of UVPSpecs
+        2D list of UVPSpecs that can be submitted to bootstrap or save functions.
     """
     uvp = copy.deepcopy(uvp)
 
@@ -485,3 +514,15 @@ def sep_files(uvp, filenames):
         uvp_list.append([u])
 
     return uvp_list
+
+def _del_jackknife(jkpc, jktype):
+    """
+    Deletes a jackknife group from a PSpecContainer
+    """
+    if "jackknives" not in jkpc.data.keys():
+        return None
+    jacks = jkpc.data["jackknives"]
+    jktypes = [j.split(".")[0] for j in jacks.keys()]
+    for i, j in enumerate(jacks.keys()):
+        if j.split(".")[0] == "omit_ants":
+            del jacks[j]

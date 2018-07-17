@@ -9,7 +9,7 @@ import numpy as np
 class Test_JKSet():
 
     def setUp(self):
-        filepath = os.path.join(DATA_PATH, "test_pc_jackknife.h5")
+        filepath = os.path.join(DATA_PATH, "uvp_jackknife.h5")
         self.pc = hp.container.PSpecContainer(filepath)
 
     def test_init(self):
@@ -27,8 +27,8 @@ class Test_JKSet():
         nt.assert_true(all([attr.shape[:2] == (40, 2) for attr in [jk.spectra, jk.errs, jk.times, jk.integrations, jk.nsamples]]))
 
         nt.assert_true(np.all(np.moveaxis(jk.spectra, 0, 1) == jk.T().spectra))
-        nt.assert_true(jk.flatten().shape == (1, 80))
-        nt.assert_true(jk.flatten() == jk.reshape(1, 80))
+        nt.assert_true(jk.flatten().shape == (80,))
+        nt.assert_true(jk.flatten() == jk.reshape(80))
         
         nt.assert_false(jk == jk2)
         jk.add(jk2, axis=1, inplace=False)
