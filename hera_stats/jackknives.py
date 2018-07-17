@@ -312,8 +312,8 @@ def stripe_times(uvp, period=None, verbose=False):
         [uvp1, uvp2] = [uvp.select(times=t, inplace=False) for t in [t1, t2]]
 
         # Set metadata
-        uvp1.labels = np.array(["Period %.2f sec Even" % per])
-        uvp2.labels = np.array(["Period %.2f sec Odd" % per])
+        uvp1.labels = np.array(["period_%0.2f_even" % per])
+        uvp2.labels = np.array(["period_%0.2f_odd" % per])
         uvp1.jktype = "stripe_times"
         uvp2.jktype = "stripe_times"
         uvpl.append([uvp1,uvp2])
