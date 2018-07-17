@@ -5,8 +5,6 @@ import copy
 import os
 import utils
 import astropy.coordinates as cp
-import time
-
 
 def _bootstrap_single_uvp(uvp, pol, blpairs=None, n_boots=40):
     
@@ -90,7 +88,7 @@ def bootstrap_jackknife(uvp_list, pol, blpairs=None, n_boots=50):
     Parameters
     ----------
     uvp_list: list of UVPSpec pairs
-        The jackknived data, with UVPSpec.labels as the group and UVPSpec.jkftype as 
+        The jackknived data, with UVPSpec.labels as the group and UVPSpec.jktype as 
         the jackknife type, shape=(n, 2).
 
     pol: string
@@ -122,11 +120,11 @@ def bootstrap_jackknife(uvp_list, pol, blpairs=None, n_boots=50):
         uvp_boot_list.append(bspair)
     return uvp_boot_list
 
-def save_jackknife(pc, uvp_list):
+def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
     """
     Saves a bootstrapped jackknife pair list to a PSpecContainer.
     Each jackknife has a type, specified in the jackknife function and
-    saved as uvp.jkftype, which is used to create the group name {jkftype}.{n},
+    saved as uvp.jktype, which is used to create the group name {jktype}.{n},
     where n is the location in uvp_list. then, each UVPSpec in uvp_list[n] is
     saved as grp{i}, where i is the index within uvp_list[n].
 
@@ -146,19 +144,28 @@ def save_jackknife(pc, uvp_list):
                                                                        type(uvp_list).__name__)
     assert isinstance(uvp_list[0][0], hp.UVPSpec), "entries of uvp_list must be UVPSpecs."
 
-    # Check if all jackknives are the same type
-    jkftypes = [u.jkftype  for uvp in uvp_list for u in uvp]
-    if all([j == jkftypes[0] for j in jkftypes]):
-        jkftype = jkftypes[0]
+    if set_jktype is None:
+        assert all([hasattr(u, "jktype") for uvp in uvp_list for u in uvp]), "If not all uvps have attribute 'jktype', one must be specified via parameter 'set_jktype'"
+        # Check if all jackknives are the same type
+        jktypes = [u.jktype for uvp in uvp_list for u in uvp]
+        if all([j == jktypes[0] for j in jktypes]):
+            jktype = jktypes[0]
+        else:
+            raise AttributeError("All jackknifes must be of the same type")
     else:
-        raise AttributeError("All jackknifes must be of the same type")
+        assert isinstance(set_jktype, str), "set_jktype must be a string."
+        jktype = set_jktype
+
+    _del_jackknife(pc, jktype)
 
     for i, uvp_pair in enumerate(uvp_list):
-        jkf = "%s.%i" % (uvp_pair[0].jkftype, i)
+        jkf = "jackknives"
         for k, uvp in enumerate(uvp_pair):
             # Save pspec to group 
-            name = "grp%i" % k
-            pc.set_pspec(jkf, psname=name, pspec=uvp)
+            uvp.label_1_array = np.array([0])
+            uvp.label_2_array = np.array([0])
+            name = "{}.{}.{}".format(jktype, i, k)
+            pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
 def split_ants(uvp, n_jacks=40, verbose=False):
     """
@@ -182,6 +189,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         List of hera_pspec.UVPSpec objects that have been split
         accordingly.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -191,7 +200,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         assert isinstance(uvp, hp.UVPSpec), "Expected uvp to be list or UVPSpec, not {}".format(type(uvp).__name__)
 
     # Load all baselines in uvp
-    blns = map(uvp.bl_to_antnums, uvp.bl_array)
+    bl_array = np.unique([uvp.antnums_to_bl(bl) for blp in uvp.get_blpairs() for bl in blp])
+    blns = map(uvp.bl_to_antnums, bl_array)
     ants = np.unique(blns)
 
     groups = []
@@ -234,91 +244,10 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         # Set metadata for saving
         uvp1.labels = np.array(list(grps[0]))
         uvp2.labels = np.array(list(grps[1]))
-        uvp1.jkftype = "spl_ants"
-        uvp2.jkftype = "spl_ants"
+        uvp1.jktype = "spl_ants"
+        uvp2.jktype = "spl_ants"
 
         uvpl.append([uvp1,uvp2])
-
-    return uvpl
-
-
-def split_files(uvp, files, identifier=None, filepairs=None, verbose=False):
-    """
-    Splits the files into two groups, using one of two methods. One of
-    these must be provided. Providing both will error out.
-
-    If an identifier is specified, the jackknife finds the files that
-    have the identifier and compares them to those which don't. It
-    automatically does every combination but only up to a maximum of
-    n_jacks (not yet tho).
-
-    If pairs are specified, which is a list of len-2 lists, the pairs are
-    selected using two indices provided. This is essentially a list of
-    pairs of indices to use for selecting files.
-
-    Parameters
-    ----------
-    uvp: list of UVPSpec objects
-        One entry to this list corresponds to one file, to be named in the
-        files kwarg.
-
-    files: list of strings
-        The filepaths of each corresponding UVPSpec in uvp.
-
-    identifier: string, optional
-        String segment to use as a filter for grouping files.
-
-    pairs: list, optional
-        List of index pairs, for a more manual selection of file groupings.
-
-    Returns
-    -------
-    uvpl: list
-        List of UVPSpecData objects split accordingly.
-    """
-    # Sanity checks
-    assert isinstance(uvp, list), "Split files needs a list of uvp objects."
-    if len(uvp) < 2:
-        raise AttributeError("Fewer than two files supplied. Make sure "
-                             "combine = False for load_uvd.")
-    if identifier is not None and filepairs is not None:
-        raise AttributeError("Please only specify either identifier or "
-                             "file pairs.")
-    if identifier is None and filepairs is None:
-        raise AttributeError("No identifier or file pair list specified.")
-
-    uvp = np.array(uvp)
-    files = np.array(files)
-    if type(identifier) == str:
-
-        infile = np.array([identifier in f for f in files])
-        grp1, uvp1 = files[infile], uvp[infile]
-        grp2, uvp2 = files[~infile], uvp[~infile]
-        minlen = min([len(uvp1), len(uvp2)])
-        for i in range(minlen):
-            uvp1[i].jkftype = "spl_files"
-            uvp1[i].labels = np.array([grp1[i]])
-            uvp2[i].jkftype = "spl_files"
-            uvp2[i].labels = np.array([grp2[i]])
-
-        if len(grp1) == 0:
-            raise AttributeError("Identifier not found in any filenames "
-                                 "loaded.")
-        if len(grp2) == 0:
-            raise AttributeError("Identifier found in all filenames... "
-                                 "Be more strict!")
-
-        print uvp1, uvp2
-        uvpl = [[uvp1[i], uvp2[i]] for i in range(len(uvp1))]
-        grps = [[grp1[i], grp2[i]] for i in range(len(grp1))]
-
-        if verbose:
-            print "Found %i pairs of files" % len(uvpl)
-
-    # Split according to index pairs provided
-    elif type(filepairs) == list:
-        uvpl = [[uvp[i], uvp[j]] for [i,j] in filepairs]
-        grps = [[files[i], files[j]] for [i,j] in filepairs]
 
     return uvpl
 
@@ -346,6 +275,8 @@ def stripe_times(uvp, period=None, verbose=False):
     uvpl: list
         List of UVPSpecData objects split accordingly.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, list):
         if len(uvp) > 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -381,15 +312,15 @@ def stripe_times(uvp, period=None, verbose=False):
         [uvp1, uvp2] = [uvp.select(times=t, inplace=False) for t in [t1, t2]]
 
         # Set metadata
-        uvp1.labels = "Period %.2f sec Even" % per
-        uvp2.labels = "Period %.2f sec Odd" % per
-        uvp1.jkftype = "stripe_times"
-        uvp2.jkftype = "stripe_times"
+        uvp1.labels = np.array(["period_%0.2f_even" % per])
+        uvp2.labels = np.array(["period_%0.2f_odd" % per])
+        uvp1.jktype = "stripe_times"
+        uvp2.jktype = "stripe_times"
         uvpl.append([uvp1,uvp2])
 
     return uvpl
 
-def split_gha(uvp, bins_list, specify_bins=False):
+def split_gha(uvp, bins_list, specify_bins=False, bls=None):
     """
     Splits based on the galactic hour-angle at the time of measurement.
 
@@ -408,11 +339,17 @@ def split_gha(uvp, bins_list, specify_bins=False):
         If true, allows bins_list to be specified as a list of the bins themselves.
         Default: False
 
+    bls: list of tuples, optional
+        The baselines to use in in omitting antenna. If None, uses all
+        baselines. Default: None.
+
     Returns
     -------
     uvpl: list of UVPSpec pairs
         The resulting data, one list per jackknife.
     """
+    uvp = copy.deepcopy(uvp)
+
     if isinstance(uvp, list):
         if len(uvp) > 1:
             uvp = hp.uvpspec.combine_uvpspec(uvp)
@@ -424,6 +361,9 @@ def split_gha(uvp, bins_list, specify_bins=False):
         assert np.asarray(bins_list).ndim == 2, "Expected bins to be a list of lists."
     else:
         assert np.asarray(bins_list).ndim == 1, "Expected bins to be a list of antenna numbers."
+
+    if bls is not None:
+        uvp.select(bls=bls, inplace=True)
 
     # Create reference lst -> time_avg dictionary (for sorting).
     ref = dict(zip(uvp.lst_avg_array, uvp.time_avg_array))
@@ -457,23 +397,33 @@ def split_gha(uvp, bins_list, specify_bins=False):
             _uvp = uvp.select(times=jdays, inplace=False)
 
             # Set metadata
-            _uvp.jkftype = "spl_gha"
-            _uvp.labels = np.array([np.average(gha.l.deg[val])])
+            _uvp.jktype = "spl_gha"
+            angs = gha.l.deg[val]
+            angs_180 = (angs + 180) % 360
+            if np.std(angs) <= np.std(angs_180):
+                _uvp.labels = np.array([np.average(angs)])
+            else:
+                _uvp.labels = np.array([(np.average(angs_180) - 180) % 360])
+
             inrange.append(_uvp)
 
         uvpl.append(inrange)
     return uvpl
 
-def omit_ants(uvp, ant_nums):
+def omit_ants(uvp, ant_nums=None, bls=None):
     """
     Splits UVPSpecs into groups, omitting one antenna from each.
 
     uvp: UVPSpec or list
         Single UVPSpec or list of UVPSpecs to use in splitting.
 
-    ant_nums: list
+    ant_nums: list, optional
         A list containing integers, each entry will generate one UVPSpec
         which does not contain the antenna specified.
+
+    bls: list of tuples, optional
+        The baselines to use in in omitting antenna. If None, uses all
+        baselines. Default: None.
 
     Returns
     -------
@@ -481,10 +431,12 @@ def omit_ants(uvp, ant_nums):
         A list containing one list of UVPSpecs, with one for every ant_num
         specified.
     """
-    # Check if uvp is valid and combine list.
+    uvp = copy.deepcopy(uvp)
+
+    # Check if uvp is individual UVPSpec. If not, combine list.
     if isinstance(uvp, (list, tuple, np.ndarray)):
         if len(uvp) != 1:
-            uvp = hs.uvpspec.combine_uvpspec(uvp)
+            uvp = hp.uvpspec.combine_uvpspec(uvp)
         else:
             uvp = uvp[0]
 
@@ -493,15 +445,20 @@ def omit_ants(uvp, ant_nums):
         ant_nums = list(ant_nums)
     elif isinstance(ant_nums, int):
         ant_nums = [ant_nums]
+    elif ant_nums == None:
+        ant_nums = np.unique(uvp.get_blpairs())
     else:
         raise AssertionError("Expected ant_nums to be list or int, not {}".format(type(ant_nums).__name__))
 
     assert isinstance(uvp, hp.UVPSpec), "Expected uvp to be hera_pspec.UVPSpec, not {}".format(type(uvp).__name__)
 
-    blpairs = uvp.get_blpairs()
+    if bls is None:
+        # Get all baseline pairs
+        blpairs = uvp.get_blpairs()
 
-    bls = []
-    [[bls.append(b) for b in blp if b not in bls] for blp in blpairs]
+        # Find unique baselines
+        bls = []
+        [[bls.append(b) for b in blp if b not in bls] for blp in blpairs]
 
     unique_ants = np.unique(bls)
     bl_list = []
@@ -519,7 +476,53 @@ def omit_ants(uvp, ant_nums):
         bl_i = np.array(map(uvp.antnums_to_bl, bl))[inds]
         uvp1 = uvp.select(bls=bl_i, inplace=False)
         uvp1.labels = np.array([ant_nums[i]])
-        uvp1.jkftype = "omit_ants"
+        uvp1.jktype = "omit_ants"
         uvp_list.append(uvp1)
 
     return [uvp_list]
+
+def sep_files(uvp, filenames):
+    """
+    Keeps files separate, each one having it's own UVPSpec, but formats them for jkset.
+
+    Parameters
+    ----------
+    uvp: UVPSpec or list of UVPSpecs
+        One uvpspec loaded from each individual file
+
+    filenames: list of strings
+        The filenames corresponding to UVPSpecs in the same position.
+
+    Returns
+    -------
+    uvp_list: list of UVPSpecs
+        2D list of UVPSpecs that can be submitted to bootstrap or save functions.
+    """
+    uvp = copy.deepcopy(uvp)
+
+    if isinstance(uvp, hp.UVPSpec):
+        uvp = [uvp]
+    assert isinstance(uvp, (list, tuple, np.ndarray)), "uvp must be a list."
+    assert isinstance(uvp[0], hp.UVPSpec), "uvp items must be UVPSpecs."
+    assert isinstance(filenames, (list, tuple, np.ndarray)), "filenames must be a list."
+    assert isinstance(filenames[0], str), "filnames must be strings."
+
+    uvp_list = []
+    for i, u in enumerate(uvp):
+        u.labels = np.array([filenames[i]])
+        u.jktype = "sep_files"
+        uvp_list.append([u])
+
+    return uvp_list
+
+def _del_jackknife(jkpc, jktype):
+    """
+    Deletes a jackknife group from a PSpecContainer
+    """
+    if "jackknives" not in jkpc.data.keys():
+        return None
+    jacks = jkpc.data["jackknives"]
+    jktypes = [j.split(".")[0] for j in jacks.keys()]
+    for i, j in enumerate(jacks.keys()):
+        if j.split(".")[0] == "omit_ants":
+            del jacks[j]

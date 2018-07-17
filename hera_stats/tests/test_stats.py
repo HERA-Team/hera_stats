@@ -9,25 +9,21 @@ import hera_pspec as hp
 class Test_Stats():
 
     def setUp(self):
-        self.filepath = os.path.join(DATA_PATH, "onsim.jackknife.spl_ants.Nj20.2018-06-26.17_53_12")
-        self.pc = hp.container.PSpecContainer(self.filepath)
+        filepath = os.path.join(DATA_PATH, "uvp_jackknife.h5")
+        pc = hp.container.PSpecContainer(filepath)
+        self.jkset = hs.JKSet(pc, "spl_ants")
 
     def test_stats(self):
 
-        hs.stats.anderson(self.pc, summary=True, verbose=True)
-        hs.stats.kstest(self.pc, summary=True, verbose=True)
+        hs.stats.weightedsum(self.jkset[0])
+        zs = hs.stats.zscores(self.jkset, axis=1, z_method="varsum")
+        hs.stats.anderson(zs, summary=True, verbose=True)
+        stat = hs.stats.kstest(zs, summary=True, verbose=True)
+        nt.assert_true(stat < 0.8)
 
-        p = lambda x: x.imag ** 2
-        hs.stats.anderson(self.pc, proj=p, verbose=True, method="weightedsum")
-        hs.stats.kstest(self.pc, proj=p, bins=10, verbose=True, method="weightedsum")
-
-        hs.stats.avg_spec_with_and_without(self.pc, 1)
-        hs.stats.item_summary(self.pc, 1)
-
-        nt.assert_raises(ValueError, hs.stats.get_pspec_stats, self.pc, sortby=10000)
-        nt.assert_raises(AssertionError, hs.stats.get_pspec_stats, "Thats no moon...")
-
-        nt.assert_raises(AttributeError, hs.stats.standardize, [0,1], [0])
-        nt.assert_raises(AttributeError, hs.stats.standardize, [0], [0])
-        nt.assert_raises(NameError, hs.stats.standardize, [np.arange(10)]*2,
-                         [np.arange(10)]*2, method="It's a space station...")
+        zs = hs.stats.zscores(self.jkset, axis=(0, 1), z_method="weightedsum")
+        nt.assert_equal(zs.shape, (40, 2))
+        hs.stats.kstest(zs[:, 0])
+        hs.stats.anderson(zs.flatten())
+        
+        nt.assert_raises(NameError, hs.stats.zscores, self.jkset[0], z_method="ahhhhhhhhhhh!!!")

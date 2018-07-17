@@ -12,20 +12,10 @@ class Test_Jackknife():
 
     def setUp(self):
 
-        self.filepath = os.path.join(DATA_PATH,"gaussian.N18.2018-06-06.06_15_48/")
-        self.beampath = os.path.join(DATA_PATH, "NF_HERA_Beams.beamfits")
-
-        uvd = UVData()
-        uvd.read_miriad(self.filepath)
-        cosmo = hp.conversions.Cosmo_Conversions()
-        beam = hp.PSpecBeamUV(self.beampath, cosmo=cosmo)
-        ds = hp.PSpecData([uvd, uvd], [None, None], beam=beam)
-        blpairs = [p for p in uvd.get_antpairs() if p[0]+1 == p[1]]
-        bsl1, bsl2, blpairs = hp.utils.construct_blpairs(blpairs,
-                                                         exclude_auto_bls=True,
-                                                         exclude_permutations=True)
-        self.uvp = ds.pspec(bsl1, bsl2, (0,1), ("XX", "XX"), spw_ranges=[(600,610)], verbose=False)
-
+        self.filepath = os.path.join(DATA_PATH, "uvp_data.h5")
+        pc = hp.container.PSpecContainer(self.filepath)
+        self.uvp = pc.get_pspec("IDR2_1")[0]
+        self.uvp_list = pc.get_pspec("IDR2_1")[0]
 
     def test_bootstrap_and_save(self):
 
@@ -34,10 +24,10 @@ class Test_Jackknife():
         uvpl = hs.jackknives.split_ants(uvp, 1)
         uvplb = hs.jackknives.bootstrap_jackknife(uvpl, "xx")
 
-        pc = hs.PSpecContainer("./test", "rw")
+        pc = hs.PSpecContainer("./test_save_jackknife", "rw")
         hs.jackknives.save_jackknife(pc, uvplb)
 
-        os.system("rm -f ./test*")
+        os.system("rm -f ./test_save_jackknife")
 
     def test_split_ants(self):
 
@@ -50,25 +40,14 @@ class Test_Jackknife():
     def test_stripe_times(self):
 
         uvp = hs.jackknives.stripe_times(self.uvp, verbose=True)
-        uvp = hs.jackknives.stripe_times(self.uvp, 100)
-        uvp = hs.jackknives.stripe_times(self.uvp, [100, 200])
+        uvp = hs.jackknives.stripe_times(self.uvp, 21.)
+        uvp = hs.jackknives.stripe_times(self.uvp, [21., 32.])
         nt.assert_equal(np.array(uvp).shape, (2, 2))
         nt.assert_raises(AssertionError, hs.jackknives.stripe_times, np.array([]))
 
-    def test_split_files(self):
-
-        uvp = [self.uvp]*2
-        files = ["thebestfile","thebiggestfile"]
-        
-        uvpl = hs.jackknives.split_files(uvp, files, "best", verbose=True)
-
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "whattheheckisthis")
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18")
-        nt.assert_raises(AttributeError, hs.jackknives.split_files, uvp, files, "18",[[0,1]])
-
     def test_split_gha(self):
-        uvp = hs.jackknives.split_gha([self.uvp], bins_list=[10])
-        uvp = hs.jackknives.split_gha(self.uvp, bins_list=[np.linspace(228.2, 228.4, 4)], specify_bins=True)
+        uvp = hs.jackknives.split_gha([self.uvp], bins_list=[1])
+        uvp = hs.jackknives.split_gha(self.uvp, bins_list=[np.linspace(228.2, 228.3, 1)], specify_bins=True)
         
         nt.assert_raises(AttributeError, hs.jackknives.split_gha, self.uvp, [(0,1,2)], True)
 
@@ -80,3 +59,7 @@ class Test_Jackknife():
         uvp = hs.jackknives.omit_ants([self.uvp], 1)
         
 
+    def test_sep_files(self):
+
+        sep = hs.jackknives.sep_files(self.uvp_list, ["f1", "f2"])
+        
