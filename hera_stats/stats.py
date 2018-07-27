@@ -1,6 +1,3 @@
-# Statistics and such for hera data
-# Duncan Rocha, June 2018
-
 import numpy as np
 import pickle as pkl
 from scipy import stats as spstats
@@ -8,6 +5,59 @@ import hera_pspec as hp
 import utils
 import copy 
 import jkset as jkset_lib
+
+
+def uvp_zscore(uvp, error_field='bs_std', inplace=False):
+    """
+    Calculate a zscore of a UVPSpec object using
+    entry 'error_field' in its stats_array. This
+    assumes that the UVPSpec object has been already
+    mean subtracted by using UVPSpec.subtract().
+
+    The resultant zscore is stored in the stats_array
+    as error_field + "_zscore".
+
+    Parameters
+    ----------
+    uvp : UVPSpec object
+
+    error_field : str, optional
+        Key of stats_array to use as normalization.
+
+    inplace : bool, optional
+        If True, add zscores into input uvp, else
+        make a copy of uvp and return with zscores.
+
+    Returns
+    -------
+    if inplace:
+        uvp : UVPSpec object
+    """
+    if not inplace:
+        uvp = copy.deepcopy(uvp)
+
+    # check error_field
+    assert error_field in uvp.stats_array.keys(), "{} not found in stats_array".format(error_field)
+    new_field = "{}_zscore".format(error_field)
+
+    # iterate over spectral windows
+    for i, spw in enumerate(uvp.spw_array):
+        # iterate over polarizations
+        for j, pol in enumerate(uvp.pol_array):
+            # iterate over blpairs
+            for k, blp in enumerate(uvp.blpair_array):
+                key = (spw, blp, pol)
+
+                # calculate z-score: real and imag separately
+                d = uvp.get_data(key)
+                e = uvp.get_stats(error_field, key)
+                zsc = d.real / e.real + 1j * d.imag / e.imag
+
+                # set into uvp
+                uvp.set_stats(new_field, key, zsc)
+
+    if not inplace:
+        return uvp
 
 
 def weightedsum(jkset, axis=0):
@@ -82,6 +132,7 @@ def weightedsum(jkset, axis=0):
         uvp.labels = np.array(["Weighted Sum"])
 
     return jkav
+
 
 def zscores(jkset, z_method="weightedsum", axis=0):
     """
@@ -171,6 +222,7 @@ def zscores(jkset, z_method="weightedsum", axis=0):
     jkout.jktype = "zscore_%s" % z_method
     return jkout
 
+
 def kstest(jkset, summary=False, cdf=None, verbose=False):
     """
     Does a kstest on spectra in jkset. The input jkset must have shape[0] == 1,
@@ -239,6 +291,7 @@ def kstest(jkset, summary=False, cdf=None, verbose=False):
     else:
         failfrac = fails/len(jkset.dlys)
         return failfrac
+
 
 def anderson(jkset, summary=False, verbose=False):
     """
