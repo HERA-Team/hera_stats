@@ -12,7 +12,8 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
     Calculate a zscore of a UVPSpec object using
     entry 'error_field' in its stats_array. This
     assumes that the UVPSpec object has been already
-    mean subtracted by using UVPSpec.subtract().
+    mean subtracted using
+    hera_pspec.uvpspec_utils.subtract_uvp().
 
     The resultant zscore is stored in the stats_array
     as error_field + "_zscore".
@@ -22,7 +23,7 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
     uvp : UVPSpec object
 
     error_field : str, optional
-        Key of stats_array to use as normalization.
+        Key of stats_array to use as z-score normalization.
 
     inplace : bool, optional
         If True, add zscores into input uvp, else
@@ -37,7 +38,8 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
         uvp = copy.deepcopy(uvp)
 
     # check error_field
-    assert error_field in uvp.stats_array.keys(), "{} not found in stats_array".format(error_field)
+    assert error_field in uvp.stats_array.keys(), "{} not found in stats_array" \
+           .format(error_field)
     new_field = "{}_zscore".format(error_field)
 
     # iterate over spectral windows
@@ -60,7 +62,10 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
         return uvp
 
 
-def weightedsum(jkset, axis=0):
+## Everything below is currently broken due to JKSet.py being broken
+## See test_stats.py for example runs
+
+def weightedsum(jkset, axis=0, error_field='bs_std'):
     """
     Calculates the weighted sum average of the spectra over a specific axis.
 
@@ -96,7 +101,7 @@ def weightedsum(jkset, axis=0):
     # Do weighted sum calculation
     aerrs = 1. / np.sum(jk.errs ** -2, axis=axis)
     av = aerrs * np.sum(jk.spectra * jk.errs**-2, axis=axis)
-    std = (aerrs * len(jkset.spectra)) ** 0.5
+    std = (aerrs * len(jk.spectra)) ** 0.5
 
     # Average or sum metadata
     nsamp = np.sum(jk.nsamples, axis=axis)
@@ -120,7 +125,7 @@ def weightedsum(jkset, axis=0):
     jkav = jk[tuple(key)]
 
     # Set average and error of jk
-    jkav.set_data(av, std)
+    jkav.set_data(av, std, error_field=error_field)
 
     # Set UVPSpec attrs
     for i, uvp in enumerate(jkav._uvp_list):
@@ -134,7 +139,7 @@ def weightedsum(jkset, axis=0):
     return jkav
 
 
-def zscores(jkset, z_method="weightedsum", axis=0):
+def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
     """
     Calculates the z scores for a JKSet along a specified axis. This
     returns another JKSet object, which has the zscore data and errors
@@ -192,7 +197,7 @@ def zscores(jkset, z_method="weightedsum", axis=0):
             std = np.expand_dims(std, axis[0])
 
         z = (spectra - av)/(std)
-        jkout.set_data(z, 0*z)
+        jkout.set_data(z, 0*z, error_field=error_field)
 
     # Calculate z scores using sum of variances
     elif z_method == "varsum":
@@ -210,9 +215,9 @@ def zscores(jkset, z_method="weightedsum", axis=0):
         z = ((spectra[key1] - spectra[key2])/comberr)
 
         # Use weightedsum to shrink jkset to size, then replace data
-        jkout = weightedsum(jkout, axis=axis)
+        jkout = weightedsum(jkout, axis=axis, error_field=error_field)
         #print jkout.shape, z.shape
-        jkout.set_data(z, 0*z)
+        jkout.set_data(z, 0*z, error_field=error_field)
     else:
         raise NameError("Z-score calculation method not recognized")
 

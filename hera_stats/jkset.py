@@ -2,8 +2,12 @@ import numpy as np
 import hera_pspec as hp
 import copy
 
+
+### Currently broken at JKSet.set_data() :( See test_jkset.py ###
+
 class JKSet(object):
-    def __init__(self, pc_uvp, jktype, error_field="bootstrap_errs"):
+
+    def __init__(self, pc_uvp, jktype, error_field="bs_std"):
         """
         JKSet is a class to handle sets of single spectra outputted by jackknives
         and usable for other purposes. At the core is a list of UVPSpecs with single
@@ -15,8 +19,7 @@ class JKSet(object):
         ----------
         pc_uvp: PSpecContainer or 2D list
             The input for the JKSet. Each UVPSpec in either the container or the list
-            must contain only one spectrum, and a stats_array entry named
-            "bootstrap_errors."
+            must contain only one spectrum, and a stats_array entry "error_field"
 
         jktype: string, optional
             If this comes from a jackknife, especially when loading from a container,
@@ -34,7 +37,7 @@ class JKSet(object):
         else:
             raise AssertionError("Expected pc_uvp to be either a PSpecContainer or a list, got %s." % type(pc_uvp).__name__)
 
-    def _load_pc(self, pc, jktype, error_field="bootstrap_errs"):
+    def _load_pc(self, pc, jktype, error_field="bs_std"):
         """
         Loads a PSpecContainer.
 
@@ -48,8 +51,8 @@ class JKSet(object):
 
         error_field: string
             The error field of the UVPSpec stats_array from which to
-            load errors. Default: "bootstrap_errs" (which is set by
-            bootstrap_jackknife in hera_stats.jackknife).
+            load errors. Default: "bs_std" (which is set by
+            hera_pspec.grouping.bootsrap_resampled_error).
         """
         # Get jackknife name data
         jkf_strs = pc.spectra("jackknives")
@@ -75,7 +78,7 @@ class JKSet(object):
 
         self._load_uvp(uvp_list, jktype, error_field)
 
-    def _load_uvp(self, uvp_list, jktype, error_field="bootstrap_errs", proj=None):
+    def _load_uvp(self, uvp_list, jktype, error_field="bs_std", proj=None):
         """
         Loads a 2D list of UVPSpecs.
 
@@ -87,10 +90,10 @@ class JKSet(object):
         jktype: string
             String that indicates the jackknife type.
 
-        error_field: string, optional
+        error_field: string
             The error field of the UVPSpec stats_array from which to
-            load errors. Default: "bootstrap_errs" (which is set by
-            bootstrap_jackknife in hera_stats.jackknife).
+            load errors. Default: "bs_std" (which is set by
+            hera_pspec.grouping.bootsrap_resampled_error).
 
         proj: function, optional
             In development, can specify how to project the data when loading it.
@@ -110,7 +113,7 @@ class JKSet(object):
 
         # Functions used to get attrs and arrays.
         load_attr = [lambda uvp: proj(uvp.get_data((0, uvp.get_blpairs()[0], "xx"))[0]),
-                     lambda uvp: proj(uvp.get_stats("bootstrap_errs", (0, uvp.get_blpairs()[0], "xx"))[0]),
+                     lambda uvp: proj(uvp.get_stats(error_field, (0, uvp.get_blpairs()[0], "xx"))[0]),
                      lambda uvp: uvp.labels,
                      lambda uvp: uvp.time_avg_array[0],
                      lambda uvp: uvp.vis_units,
@@ -237,7 +240,7 @@ class JKSet(object):
         else:
             return JKSet(new_uvp, self.jktype, self._error_field)
 
-    def set_data(self, spectra, errs):
+    def set_data(self, spectra, errs, error_field='bs_std'):
         """
         Sets the spectra data and errors of this class.
 
@@ -249,6 +252,11 @@ class JKSet(object):
 
         errs: 3d ndarray
             Errors to set. Same restrictions as above.
+
+        error_field: string
+            The error field of the UVPSpec stats_array from which to
+            load errors. Default: "bs_std" (which is set by
+            hera_pspec.grouping.bootsrap_resampled_error).
         """
         # Check is spectra and errors have same first 2 dimensions as class
         msg = "First two axes of {} {} and {} {} must match."
@@ -268,13 +276,14 @@ class JKSet(object):
         # Recursive function for setting spectra and errors.
         def recursive_set(obj, spectra, errs):
             if isinstance(obj, hp.UVPSpec):
-                obj.data_array[0] = np.expand_dims(spectra[None], 2)
-                obj.stats_array["bootstrap_errs"][0] = np.expand_dims(errs[None], 2)
+                obj.data_array[0] = np.asarray(np.expand_dims(spectra[None], 2), dtype=np.complex128)
+                obj.stats_array[error_field][0] = np.asarray(np.expand_dims(errs[None], 2), dtype=np.complex128)
+                obj.check()
                 return obj
             elif isinstance(obj, (list, np.ndarray)):
                 return np.array([recursive_set(obj[i], spectra[i], errs[i]) for i in range(len(obj))])
 
-        # Recursicely set data and load the new uvp_list
+        # Recursively set data and load the new uvp_list
         uvpl = copy.deepcopy(self._uvp_list)
         uvp_list = recursive_set(uvpl, spectra, errs)
         self._load_uvp(uvp_list, self.jktype, self._error_field)

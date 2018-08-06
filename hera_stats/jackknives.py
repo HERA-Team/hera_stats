@@ -167,7 +167,7 @@ def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
             name = "{}.{}.{}".format(jktype, i, k)
             pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
-def split_ants(uvp, n_jacks=40, verbose=False):
+def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
     """
     Splits available antenna into two groups randomly, and returns the
     UVPSpec of each.
@@ -179,6 +179,10 @@ def split_ants(uvp, n_jacks=40, verbose=False):
 
     n_jacks: int, optional
         Number of times to jackknife the data. Default: 40.
+
+    minlen : int, optional
+        Minimum number of baselines needed in final group.
+        Default: 3.
 
     verbose: boolean, optional
         If true, prints actions.
@@ -211,8 +215,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         if verbose:
             print "Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks)
         c = 0
-        minlen = 0
-        while minlen <= len(blns)//6 or minlen <= 3:
+        blglen = 0
+        while blglen <= len(blns)//6 or blglen <= minlen:
             # Split antenna into two equal groups
             grps = np.random.choice(ants, len(ants)//2*2,
                                     replace=False).reshape(2, -1)
@@ -225,8 +229,8 @@ def split_ants(uvp, n_jacks=40, verbose=False):
                 elif bl[0] in grps[1] and bl[1] in grps[1]:
                     blg[1].append(bl)
 
-            # Find minimum baseline length
-            minlen = min([len(b) for b in blg])
+            # Find minimum baseline group length
+            blglen = min([len(b) for b in blg])
 
             # If fails to find big enough group 50 times, raise excption
             c += 1
@@ -235,11 +239,11 @@ def split_ants(uvp, n_jacks=40, verbose=False):
 
         blgroups = []
         for b in blg:
-            inds = np.random.choice(range(len(b)), minlen, replace=False)
+            inds = np.random.choice(range(len(b)), blglen, replace=False)
             blgroups.append([uvp.antnums_to_bl(b[i]) for i in inds])
 
         # Split uvp by groups
-        [uvp1,uvp2] = [uvp.select(bls=b, inplace=False) for b in blgroups]
+        [uvp1,uvp2] = [uvp.select(bls=b, only_pairs_in_bls=False, inplace=False) for b in blgroups]
 
         # Set metadata for saving
         uvp1.labels = np.array(list(grps[0]))
@@ -250,6 +254,7 @@ def split_ants(uvp, n_jacks=40, verbose=False):
         uvpl.append([uvp1,uvp2])
 
     return uvpl
+
 
 def stripe_times(uvp, period=None, verbose=False):
     """
@@ -303,6 +308,7 @@ def stripe_times(uvp, period=None, verbose=False):
         # Phase randomly to broaden search
         phase = np.random.uniform(0, per)
         select = np.sin(2*np.pi*(secs + phase)/per) >= 0
+        assert select.any(), "No times selected in random search..."
 
         # Split times into bins
         minlen = min([sum(select), sum(~select)])
@@ -319,6 +325,7 @@ def stripe_times(uvp, period=None, verbose=False):
         uvpl.append([uvp1,uvp2])
 
     return uvpl
+
 
 def split_gha(uvp, bins_list, specify_bins=False, bls=None):
     """
@@ -383,7 +390,7 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
         if isinstance(bins, int):
             bins = utils.bin_wrap(gha.l.deg, bins)
 
-        inrange=[]
+        inrange = []
         for i in range(len(bins) - 1):
             # Check if 
             gha_range = (bins[i], bins[i + 1])

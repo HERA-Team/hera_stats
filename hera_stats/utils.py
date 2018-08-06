@@ -1,6 +1,4 @@
 # Extra utilities for hera_stats
-
-import ephem
 import os
 import copy
 import numpy as np

@@ -1,9 +1,10 @@
-# Plots for visualizing data
-
 import matplotlib.pyplot as plt
 import numpy as np
-import stats
-import utils
+from hera_stats import stats
+from hera_stats import utils
+
+
+## Currently broken :(. See example runs in test_plot.py ##
 
 
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
