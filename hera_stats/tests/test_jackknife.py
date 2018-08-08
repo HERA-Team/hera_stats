@@ -10,36 +10,13 @@ import shutil
 import unittest
 
 
-uvp_data_name = "jk_uvp_data.h5"
-
-def setup_module():
-    """ used to make data for the entire test script """
-    hs.testing.make_uvp_data(uvp_psc_name=uvp_data_name, overwrite=True)
-
-def teardown_module():
-    """ used to remove data used by the entire test script """
-    if os.path.exists(uvp_data_name):
-        os.remove(uvp_data_name)
-
 class Test_Jackknife(unittest.TestCase):
 
     def setUp(self):
-        self.filepath = uvp_data_name
+        self.filepath = os.path.join(DATA_PATH, "uvp_data.h5")
         pc = hp.container.PSpecContainer(self.filepath, mode='r')
         self.uvp = pc.get_pspec("IDR2_1")[0]
         self.uvp_list = pc.get_pspec("IDR2_1")[0]
-
-    def test_bootstrap_and_save(self):
-        np.random.seed(0)
-        uvp = self.uvp
-        hs.jackknives._bootstrap_single_uvp(uvp, "xx")
-        uvpl = hs.jackknives.split_ants(uvp, 1)
-        uvplb = hs.jackknives.bootstrap_jackknife(uvpl, "xx")
-        if os.path.exists('test_save_jackknife'):
-            os.remove('test_save_jackknife')
-        pc = hs.PSpecContainer("./test_save_jackknife", "rw")
-        hs.jackknives.save_jackknife(pc, uvplb)
-        os.remove('test_save_jackknife')
 
     def test_split_ants(self):
         np.random.seed(0)
@@ -74,7 +51,5 @@ class Test_Jackknife(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    setup_module()
     unittest.main()
-    teardown_module()
 

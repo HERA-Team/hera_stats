@@ -62,9 +62,6 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
         return uvp
 
 
-## Everything below is currently broken due to JKSet.py being broken
-## See test_stats.py for example runs
-
 def weightedsum(jkset, axis=0, error_field='bs_std'):
     """
     Calculates the weighted sum average of the spectra over a specific axis.

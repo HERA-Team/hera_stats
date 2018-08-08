@@ -53,7 +53,7 @@ git_hash = version_info['git_hash']
 git_description = version_info['git_description']
 git_branch = version_info['git_branch']
 
-# String to add to history of any files written with this version of pyuvdata
+# String to add to history of any files written with this version
 hera_stats_version_str = ('hera_stats version: ' + version + '.')
 if git_hash is not '':
     hera_stats_version_str += ('  Git origin: ' + str(git_origin) +

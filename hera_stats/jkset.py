@@ -3,8 +3,6 @@ import hera_pspec as hp
 import copy
 
 
-### Currently broken at JKSet.set_data() :( See test_jkset.py ###
-
 class JKSet(object):
 
     def __init__(self, pc_uvp, jktype, error_field="bs_std"):

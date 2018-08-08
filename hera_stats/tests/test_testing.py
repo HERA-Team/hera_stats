@@ -24,7 +24,7 @@ def test_make_uvp_data():
     nt.assert_equal(len(uvp_psc.spectra('IDR2_1')), 2)
 
     jack_psc = hp.PSpecContainer(jack_data_name, mode='r')
-    nt.assert_equal(len(jack_psc.spectra("jackknives")), 75)
+    nt.assert_equal(len(jack_psc.spectra("jackknives")), 26)
 
     os.remove(uvp_data_name)
     os.remove(jack_data_name)

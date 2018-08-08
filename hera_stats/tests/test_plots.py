@@ -11,22 +11,10 @@ import shutil
 import unittest
 
 
-jack_data_name = "plot_jack_data.h5"
-
-
-def setup_module():
-    """ used to make data for the entire test script """
-    hs.testing.make_uvp_data(jack_psc_name=jack_data_name, overwrite=True)
-
-def teardown_module():
-    """ used to remove data used by the entire test script """
-    if os.path.exists(jack_data_name):
-        os.remove(jack_data_name)
-
 class Test_Plots():
 
     def setUp(self):
-        filepath = jack_data_name
+        filepath = os.path.join(DATA_PATH, "jack_data.h5")
         plt.ioff()
 
         pc = hp.container.PSpecContainer(filepath)
@@ -73,7 +61,5 @@ class Test_Plots():
 
 
 if __name__ == "__main__":
-    setup_module()
     unittest.main()
-    teardown_module()
 

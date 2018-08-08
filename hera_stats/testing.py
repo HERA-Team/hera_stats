@@ -14,6 +14,18 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
     This function is used to generate the most up-to-date
     HDF5 data files in hera_stats/hera_stats/data that are
     used in the tests/* testing suite.
+
+    This function can generate two files : 
+        1. a PSpecContainer w/ standard uvp objects (uvp_psc_name)
+        2. a PSpecContainer w/ a bunch of different jackknife sets (jack_psc_name)
+
+    It will only generate the files that have a specified filename and,
+    for the time being, there are some hard-coded parameters that go into
+    the generation of the PSpectra, like the weighting type, baseline types,
+    spw-ranges etc.
+
+    These files can be committed to the data/ repo under
+    uvp_data.h5 and jack_data.h5 for the testing scripts to use.
     """
     assert uvp_psc_name is not None or jack_psc_name is not None, \
            "Neither uvp_psc_name or jack_psc_name is specified, can't run..."
@@ -29,15 +41,10 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
     reds, lens, angs = hp.utils.get_reds(uvd, bl_error_tol=1.0, pick_data_ants=True)
 
     # get uvps
-    uvp1 = hp.testing.uvpspec_from_data(dfile1, reds,
+    uvp1 = hp.testing.uvpspec_from_data(dfile1, reds[:2],
                                        spw_ranges=[(50, 100)], beam=beam, verbose=False)
-    uvp1_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp1, time_avg=False, Nsamples=100, seed=0,
-                                                     normal_std=True, robust_std=False)
-
-    uvp2 = hp.testing.uvpspec_from_data(dfile2, reds,
+    uvp2 = hp.testing.uvpspec_from_data(dfile2, reds[:2],
                                        spw_ranges=[(50, 100)], beam=beam, verbose=False)
-    uvp2_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp2, time_avg=False, Nsamples=100, seed=0,
-                                                     normal_std=True, robust_std=False)
 
     if uvp_psc_name is not None:
         # put into a container
@@ -51,23 +58,36 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
 
         # split ants
         np.random.seed(5)
-        uvpl = hs.jackknives.split_ants(uvp1_avg, n_jacks=20, minlen=1, verbose=False)
+        uvpl = hs.jackknives.split_ants(uvp1, n_jacks=5, minlen=1, verbose=False)
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
-                jacks.set_pspec("jackknives", "spl_ants.{}.{}".format(i, j), uvp, overwrite=overwrite)
+                uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
+                                                                      seed=0, normal_std=True,
+                                                                      robust_std=False,
+                                                                      blpair_groups=[uvp.get_blpairs()])
+                jacks.set_pspec("jackknives", "spl_ants.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
 
         # split gha
         np.random.seed(5)
-        uvpl = hs.jackknives.split_gha(uvp1_avg, [3, 6, 4, 8, 6,])
+        uvpl = hs.jackknives.split_gha(uvp1, [3, 2, 3,])
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
-                jacks.set_pspec("jackknives", "spl_gha.{}.{}".format(i, j), uvp, overwrite=overwrite)
+                uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
+                                                                      seed=0, normal_std=True,
+                                                                      robust_std=False,
+                                                                      blpair_groups=[uvp.get_blpairs()])
+
+                jacks.set_pspec("jackknives", "spl_gha.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
 
         # stripe times
         np.random.seed(5)
-        uvpl = hs.jackknives.stripe_times(uvp1_avg)
+        uvpl = hs.jackknives.stripe_times(uvp1)
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
-                jacks.set_pspec("jackknives", "stripe_times.{}.{}".format(i, j), uvp, overwrite=overwrite)
+                uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
+                                                                      seed=0, normal_std=True,
+                                                                      robust_std=False,
+                                                                      blpair_groups=[uvp.get_blpairs()])
 
+                jacks.set_pspec("jackknives", "stripe_times.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
 

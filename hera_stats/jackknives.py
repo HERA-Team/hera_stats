@@ -6,166 +6,6 @@ import os
 import utils
 import astropy.coordinates as cp
 
-def _bootstrap_single_uvp(uvp, pol, blpairs=None, n_boots=40):
-    
-    """
-    Uses the bootstrap method to estimate the errors for a UVPSpec object.
-    Automatically averages over time.
-
-    Parameters:
-    ----------
-    uvp: hera_pspec.UVPSpec
-        Object outputted by pspec, contains power spectrum information.
-
-    pol: str
-        The polarization used in pspec calculations.
-
-    blpairs: list, optional
-        List of baseline pairs to use in bootstrapping. Should specify only redundant
-        baselines. Default: None.
-
-    n_boots: int, optional
-        How many bootstraps of the data to to to estimate error bars. Default: 100.
-
-    Returns:
-    -------
-    uvp_avg: hera_pspec.UVPSpec
-        A UVPSpec containing the averaged power spectrum and bootstrapped errors.
-    """
-    assert isinstance(uvp, hp.UVPSpec), "uvp must be a single UVPSpec."
-
-    # Calculate unique baseline pairs
-    if blpairs == None:
-        blpairs = uvp.get_blpairs()
-
-    msg = "Expected blpairs to be list of baseline pair tuples, not {}."
-    assert isinstance(blpairs[0], tuple), msg.format("list of {}".format(type(blpairs[0]).__name__))
-    assert isinstance(blpairs[0][0], tuple), msg.format("list of tuples of {}".format(type(blpairs[0][0]).__name__))
-    assert np.asarray(blpairs).shape[1:] == (2, 2), "blpairs shape does not match that of a list of baseline pair tuples."
-
-    uvp_avg = uvp.average_spectra([blpairs], time_avg = True, inplace=False)
-
-    for spw in range(uvp.Nspws):
-        allspecs = uvp.data_array[spw]
-        nsamples = uvp.nsample_array[spw]
-        integs = uvp.integration_array[spw]
-
-        boot_l = []
-        for i in range(n_boots):
-            # Choose spectra indices at random
-            inds = np.random.choice(range(len(allspecs)), len(allspecs), replace=True)
-
-            # Select spectra, nsamples, and integrations in order.
-            boot = allspecs[inds]
-            nsamps = nsamples[inds]
-            ints = integs[inds]
-
-            boot_uvp = copy.deepcopy(uvp)
-
-            # Replace old arrays with new ones.
-            boot_uvp.data_array[spw] = boot
-            boot_uvp.nsample_array[spw] = nsamps
-            boot_uvp.integration_array[spw] = ints
-
-            # Average spectra
-            boot_uvp.average_spectra([blpairs], time_avg=True)
-
-            # Get data and appendd
-            boot_spec = boot_uvp.get_data((spw, uvp.get_blpairs()[0], pol))[0]
-            boot_l.append(boot_spec)
-
-        # Calculate error bar and save to stats_array
-        boot_l = np.vstack(boot_l)
-        errs = np.std(boot_l.real, axis=0) + 1j * np.std(boot_l.imag, axis=0)
-        uvp_avg.set_stats("bootstrap_errs", (spw, uvp.get_blpairs()[0], pol), errs[None])
-
-    return uvp_avg
-
-def bootstrap_jackknife(uvp_list, pol, blpairs=None, n_boots=50):
-    """
-    Bootstraps a list of jackknife pairs.
-
-    Parameters
-    ----------
-    uvp_list: list of UVPSpec pairs
-        The jackknived data, with UVPSpec.labels as the group and UVPSpec.jktype as 
-        the jackknife type, shape=(n, 2).
-
-    pol: string
-        Polarization to use for bootstrapping.
-
-    blpairs: list, optional
-        List of baseline pairs to use in bootstrapping. Should specify only redundant
-        baselines. Default: None.
-
-    n_boots: int, optional
-        Number of times to bootstrap to create a sample. Default: 50.
-
-    Returns
-    -------
-    boot_uvp_list: list
-        List containing UVPSpecs that have been bootstrapped.
-    """
-    msg = "Expected uvp to be list of UVPSpec lists, not {}."
-    assert isinstance(uvp_list, (list, tuple, np.ndarray)), msg.format(type(uvp_list).__name__)
-    assert isinstance(uvp_list[0], (list, tuple, np.ndarray)), msg.format("list of {}".format(type(uvp_list[0]).__name__))
-    assert isinstance(uvp_list[0][0], hp.UVPSpec), msg.format("list of {} lists".format(type(uvp_list[0][0]).__name__))
-
-    uvp_boot_list = []
-    for uv in uvp_list:
-        bspair = []
-        for u in uv:
-            uc = copy.deepcopy(u)
-            bspair.append(_bootstrap_single_uvp(uc, blpairs=blpairs, pol=pol, n_boots=n_boots))
-        uvp_boot_list.append(bspair)
-    return uvp_boot_list
-
-def save_jackknife(pc, uvp_list, set_jktype=None, overwrite=False):
-    """
-    Saves a bootstrapped jackknife pair list to a PSpecContainer.
-    Each jackknife has a type, specified in the jackknife function and
-    saved as uvp.jktype, which is used to create the group name {jktype}.{n},
-    where n is the location in uvp_list. then, each UVPSpec in uvp_list[n] is
-    saved as grp{i}, where i is the index within uvp_list[n].
-
-    Parameters
-    ----------
-    pc: PSpecContainer
-        PSpecContainer in which to store the jackknife.
-
-    uvp_list: list of UVPSpecs
-        The list to save. Note: will save jackknives with no bootstrap,
-        so make sure to run uvp_list through bootstrap_jackknife first.
-    """
-    msg = "Expected {} to be {}, not {}"
-    assert isinstance(pc, hp.container.PSpecContainer), msg.format("pc", "PSpecContainer",
-                                                                   type(pc).__name__)
-    assert isinstance(uvp_list, (list, tuple, np.ndarray)), msg.format("uvp_list", "list of UVPSpecs",
-                                                                       type(uvp_list).__name__)
-    assert isinstance(uvp_list[0][0], hp.UVPSpec), "entries of uvp_list must be UVPSpecs."
-
-    if set_jktype is None:
-        assert all([hasattr(u, "jktype") for uvp in uvp_list for u in uvp]), "If not all uvps have attribute 'jktype', one must be specified via parameter 'set_jktype'"
-        # Check if all jackknives are the same type
-        jktypes = [u.jktype for uvp in uvp_list for u in uvp]
-        if all([j == jktypes[0] for j in jktypes]):
-            jktype = jktypes[0]
-        else:
-            raise AttributeError("All jackknifes must be of the same type")
-    else:
-        assert isinstance(set_jktype, str), "set_jktype must be a string."
-        jktype = set_jktype
-
-    _del_jackknife(pc, jktype)
-
-    for i, uvp_pair in enumerate(uvp_list):
-        jkf = "jackknives"
-        for k, uvp in enumerate(uvp_pair):
-            # Save pspec to group 
-            uvp.label_1_array = np.array([0])
-            uvp.label_2_array = np.array([0])
-            name = "{}.{}.{}".format(jktype, i, k)
-            pc.set_pspec(jkf, psname=name, pspec=uvp, overwrite=overwrite)
 
 def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
     """
@@ -415,7 +255,9 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
             inrange.append(_uvp)
 
         uvpl.append(inrange)
+        
     return uvpl
+
 
 def omit_ants(uvp, ant_nums=None, bls=None):
     """
@@ -488,6 +330,7 @@ def omit_ants(uvp, ant_nums=None, bls=None):
 
     return [uvp_list]
 
+
 def sep_files(uvp, filenames):
     """
     Keeps files separate, each one having it's own UVPSpec, but formats them for jkset.
@@ -522,14 +365,3 @@ def sep_files(uvp, filenames):
 
     return uvp_list
 
-def _del_jackknife(jkpc, jktype):
-    """
-    Deletes a jackknife group from a PSpecContainer
-    """
-    if "jackknives" not in jkpc.data.keys():
-        return None
-    jacks = jkpc.data["jackknives"]
-    jktypes = [j.split(".")[0] for j in jacks.keys()]
-    for i, j in enumerate(jacks.keys()):
-        if j.split(".")[0] == "omit_ants":
-            del jacks[j]

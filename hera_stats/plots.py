@@ -4,9 +4,6 @@ from hera_stats import stats
 from hera_stats import utils
 
 
-## Currently broken :(. See example runs in test_plot.py ##
-
-
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
                  z_method="weightedsum", zlim=5, logscale=True):
     """
