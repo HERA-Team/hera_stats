@@ -11,3 +11,4 @@ eggs/
 *GIT_INFO
 *ipynb_checkpoints
 *.backup
+*.DS_Store
