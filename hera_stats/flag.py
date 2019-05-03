@@ -1,5 +1,5 @@
 
-
+import numpy as np
 
 def apply_random_flags(uvd, flag_frac, seed=None, inplace=False, 
                        zero_flagged_data=False):
