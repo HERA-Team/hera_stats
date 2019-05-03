@@ -45,7 +45,7 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
         data = uvd.get_data(bls)
     
         # Calculate sigma_rms as function of freq, for real and imag parts
-        sigma_noise = 0; sigma_model = 0
+        sigma_noise = 0. + 0.j; sigma_model = 0. + 0.j
         for fn, factor in ((np.real, 1.), (np.imag, 1.j)):
             
             # Difference along time ax then take std. dev. (also along time axis)
