@@ -66,7 +66,7 @@ class JKSet(object):
         refdic = {}
         jkf_groups = [[int(a[1]), int(a[2])] for a in all_jkfs]
         for n, i in jkf_groups:
-            if n not in refdic.keys(): refdic[n] = {}
+            if n not in list(refdic.keys()): refdic[n] = {}
             refdic[n][i] = jktype + "." + str(n) + "." + str(i)
 
         # Load UVPSpecs to 2d list
@@ -364,7 +364,7 @@ def peek(pc):
     try:
         sp = pc.spectra("jackknives")
     except:
-        print "No jackknives found in PSpecContainer"
+        print("No jackknives found in PSpecContainer")
     sp = np.array([s.split(".") for s in sp])
 
     # Extract jackknife ypes and array shapes
@@ -374,5 +374,5 @@ def peek(pc):
     shapes = [(nj[i]/n[i], n[i]) for i in range(len(n))]
 
     for shp, jkt in zip(shapes, jktypes):
-        print "%s:" % jkt
-        print "   shape: %s" % str(shp)
+        print("%s:" % jkt)
+        print("   shape: %s" % str(shp))

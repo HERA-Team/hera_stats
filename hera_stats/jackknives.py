@@ -3,7 +3,7 @@ import hera_pspec as hp
 from pyuvdata import UVData
 import copy
 import os
-import utils
+from . import utils
 import astropy.coordinates as cp
 
 
@@ -45,7 +45,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
 
     # Load all baselines in uvp
     bl_array = np.unique([uvp.antnums_to_bl(bl) for blp in uvp.get_blpairs() for bl in blp])
-    blns = map(uvp.bl_to_antnums, bl_array)
+    blns = list(map(uvp.bl_to_antnums, bl_array))
     ants = np.unique(blns)
 
     groups = []
@@ -53,7 +53,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
     for i in range(n_jacks):
 
         if verbose:
-            print "Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks)
+            print("Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks))
         c = 0
         blglen = 0
         while blglen <= len(blns)//6 or blglen <= minlen:
@@ -79,7 +79,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
 
         blgroups = []
         for b in blg:
-            inds = np.random.choice(range(len(b)), blglen, replace=False)
+            inds = np.random.choice(list(range(len(b))), blglen, replace=False)
             blgroups.append([uvp.antnums_to_bl(b[i]) for i in inds])
 
         # Split uvp by groups
@@ -213,7 +213,7 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
         uvp.select(bls=bls, inplace=True)
 
     # Create reference lst -> time_avg dictionary (for sorting).
-    ref = dict(zip(uvp.lst_avg_array, uvp.time_avg_array))
+    ref = dict(list(zip(uvp.lst_avg_array, uvp.time_avg_array)))
     rads = np.unique(uvp.lst_avg_array)
 
     # Get telescope location information
@@ -321,8 +321,8 @@ def omit_ants(uvp, ant_nums=None, bls=None):
 
     uvp_list = []
     for i, bl in enumerate(bl_list):
-        inds = np.random.choice(range(len(bl)), minlen, replace=False)
-        bl_i = np.array(map(uvp.antnums_to_bl, bl))[inds]
+        inds = np.random.choice(list(range(len(bl))), minlen, replace=False)
+        bl_i = np.array(list(map(uvp.antnums_to_bl, bl)))[inds]
         uvp1 = uvp.select(bls=bl_i, inplace=False)
         uvp1.labels = np.array([ant_nums[i]])
         uvp1.jktype = "omit_ants"
