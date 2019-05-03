@@ -60,3 +60,43 @@ def is_in_wrap(low, hi, angle):
         return True
 
     return False
+
+
+def trim_empty_blpairs(uvp, bl_grp, spw=0, pol='pI'):
+    """
+    Remove any baseline-pairs with zero data from a list of blpairs.
+    
+    Parameters
+    ----------
+    uvp : UVPSpec
+        Contains power spectra.
+    
+    bl_grp : list of lists of tuples
+        List of redundant groups of baseline pairs, e.g. output by 
+        hera_pspec.utils.get_blvec_reds().
+        
+    spw : int, optional
+        ID of the spectral window to test for zero data. 
+        Default: 0.
+    
+    pol : str, optional
+        Which polarization to test for zero data. Default 'pI'.
+    
+    Returns
+    -------
+    bl_grp_trimmed : list of lists of tuples
+        Copy of bl_grp with all zeroed blpairs removed. Redundant 
+        groups with no data on any baseline pair will remain in 
+        the list.
+    """
+    new_bl_grp = []
+    
+    # Loop over redundant groups
+    for grp in bl_grp:
+        new_grp = []
+        for i, blp in enumerate(grp):
+            dsum = uvp.get_data((spw, blp, pol)).real.sum()
+            if dsum != 0.:
+                new_grp.append(blp)
+        new_bl_grp.append(new_grp)
+    return new_bl_grp
