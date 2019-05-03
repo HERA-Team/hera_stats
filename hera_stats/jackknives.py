@@ -365,3 +365,69 @@ def sep_files(uvp, filenames):
 
     return uvp_list
 
+
+def split_blps_by_antnum(blps, split='norepeat'):
+    """
+    Split a list of redundant groups of baseline-pairs into two; 
+    one where the same antenna is never used more than once in 
+    a blpair, and one where it is.
+    
+    Parameters
+    ----------
+    blps : list of list of blpairs
+        List of redundant groups of baseline-pairs. The blps can 
+        be either tuples of tuples, or blpair integers.
+    
+    split : str, optional
+        Type of split to perform on each baseline group. Available  
+        options are:
+        
+        - 'norepeat':
+            Split into one group where antennas are used at most 
+            once per blpair, and another where they are used 
+            more than once.
+            
+        - 'noauto': 
+            Split into one group with auto-blpairs and one group 
+            with non-autos (but antennas can be used more than 
+            once per blpair).
+         
+         
+    Returns
+    -------
+    blps_a, blps_b : list of list of blpairs
+        List of redundant groups of baseline-pairs.
+    """
+    if split not in ['norepeat',]:
+        raise ValueError("split type '%s' not recognized." % split)
+    
+    # Loop over redundant groups
+    blps_a, blps_b = [], []
+    for grp in blps:
+        
+        # Loop over baseline-pairs
+        grp_a, grp_b = [], []
+        for blp in grp:
+            
+            # Convert into antnum pairs if not already
+            if isinstance(blp, int):
+                blp = uvp.blpair_to_antnums(blp)
+            
+            # Split according to whether antenna numbers are repeated
+            if split == 'norepeat':
+                # Split out 
+                if np.unique(blp).size == 4:
+                    grp_a.append(blp)
+                else:
+                    grp_b.append(blp)
+            elif split == 'noauto':
+                # Split out blpairs being multiplied by themselves
+                if sorted(blp[0]) == sorted(blp[1]):
+                    grp_a.append(blp)
+                else:
+                    grp_b.append(blp)
+            
+        blps_a.append(grp_a)
+        blps_b.append(grp_b)
+        
+    return blps_a, blps_b
