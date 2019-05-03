@@ -1,4 +1,5 @@
 
+import numpy as np
 
 def average_spectra_cumul(uvp, blps, spw, pol, mode='time', min_samples=1, 
                           shuffle=False, time_avg=True, verbose=False):
