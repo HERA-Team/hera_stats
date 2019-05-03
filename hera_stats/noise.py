@@ -29,13 +29,11 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
     -------
     noise_rms : array_like, complex
         1D array of noise RMS (in the same units as the input data) as a 
-        function of frequency. Shape is (Nbls, Nfreq-1); the differences are 
-        evaluated at the point *between* frequency channel centers.
+        function of frequency. Shape is (Nbls, Nfreq).
     
     rms_model : array_like, complex, optional
         If poly_fit is True, return the smooth polynomial fit to the noise rms. 
-        Shape is (Nbls, Nfreq), i.e. the rms model is evaluated *at* frequency 
-        channel centers.
+        Shape is (Nbls, Nfreq).
     """
     # Loop over baseline keys
     noise_rms, rms_model = [], []
@@ -58,10 +56,9 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
             
             # Fit polynomial to sigma_rms if requested
             if fit_poly:
-                freq_chans = np.arange(sigma_rms.size + 1)
-                diff_chans = 0.5 * (freq_chans[1:] + freq_chans[:-1])
-                coeff_n = np.polyfit(diff_chans[idxs], sigma_rms[idxs], deg=order)
-                sigma_model += factor * np.poly1d(coeff_n)(freq_chans)
+                chans = np.arange(sigma_rms.size)
+                coeff_n = np.polyfit(chans[idxs], sigma_rms[idxs], deg=order)
+                sigma_model += factor * np.poly1d(coeff_n)(chans)
         
         # Append results to list
         noise_rms.append(sigma_noise)
