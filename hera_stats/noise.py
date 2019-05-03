@@ -1,4 +1,6 @@
 
+import numpy as np
+
 
 def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
     """
