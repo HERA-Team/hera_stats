@@ -1,5 +1,11 @@
 # init for hera_stats
+from . import jackknives
+from . import plots
+from . import stats
+from . import testing
+from . import version
+from .jkset import JKSet
 
-from hera_stats import jackknives, plots, stats, flag, average, noise, testing
-from hera_stats.jkset import JKSet
 from hera_pspec.container import PSpecContainer
+
+__version__ = version.version
