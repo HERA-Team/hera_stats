@@ -31,6 +31,15 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy nose pip matplotlib coverage h5py
   - source activate test-environment
   - conda install -c conda-forge aipy
+  - pip install h5py
+  - pip install healpy
+  - pip install pyyaml
+  - pip install multiprocess
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      pip install scikit-learn==0.20.3;
+    else
+      pip install scikit-learn;
+    fi
   - pip install coveralls
   - pip install git+https://github.com/HERA-Team/pyuvdata.git
   - pip install git+https://github.com/HERA-Team/omnical.git
@@ -38,11 +47,6 @@ install:
   - pip install git+https://github.com/HERA-Team/hera_qm.git
   - pip install git+https://github.com/HERA-Team/uvtools.git
   - pip install git+https://github.com/HERA-Team/hera_cal.git
-  - pip install healpy
-  - pip install scikit-learn
-  - pip install h5py
-  - pip install pyyaml
-  - pip install multiprocess
   - pip install git+https://github.com/HERA-Team/hera_pspec.git
   - python setup.py install
 
