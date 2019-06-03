@@ -92,16 +92,18 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
             n_samples.append( np.unique(uvp_t.time_1_array).size )
             
             # Unpack data into array (spw=0 since we only selected one spw)
-            ps = _avg.get_data((0, _avg.blpair_array[0], pol)).flatten()
+            ps = _avg.get_data((0, _avg.blpair_array[0], polpair)).flatten()
             avg_spectra.append(ps)
             dly = _avg.get_dlys(0)
             
     else:
         # Perform initial downselect of blpairs (and make copy)
-        uvp_b = uvp.select(blpairs=blps, inplace=False, spws=[spw,], pols=[pol,])
+        uvp_b = uvp.select(blpairs=blps, inplace=False, spws=[spw,], 
+                           polpairs=[polpair,])
         avail_blps = np.unique(uvp_b.blpair_array) # available blpairs
         if avail_blps.size < min_samples:
-            raise ValueError("min_samples is larger than the number of available samples.")
+            raise ValueError("min_samples is larger than the number of "
+                             "available samples.")
         if verbose: print("Unique blpairs:", avail_blps.size)
         
         # Either shuffle or sort available blpairs
@@ -113,17 +115,19 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
         # Loop over times (in reverse size order)
         avg_spectra = []; n_samples = []
         for b in range(avail_blps.size, min_samples, -1):
-            if verbose and b % 10 == 0: print("  Sample %d / %d" % (b, avail_blps.size))
+            if verbose and b % 10 == 0: 
+                print("  Sample %d / %d" % (b, avail_blps.size))
             
             # Select subset of samples (good for performance)
             uvp_b.select(blpairs=avail_blps[:b])
             
             # Average over blpair and time
-            _avg = uvp_b.average_spectra([list(avail_blps[:b]),], time_avg=time_avg, inplace=False)
+            _avg = uvp_b.average_spectra([list(avail_blps[:b]),], 
+                                         time_avg=time_avg, inplace=False)
             n_samples.append( np.unique(uvp_b.blpair_array).size )
             
             # Unpack data into array (spw=0 since we only selected one spw)
-            ps = _avg.get_data((0, _avg.blpair_array[0], pol)).flatten()
+            ps = _avg.get_data((0, _avg.blpair_array[0], polpair)).flatten()
             avg_spectra.append(ps)
             dly = _avg.get_dlys(0)
         
@@ -132,3 +136,4 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
     avg_spectra = np.array(avg_spectra)
     n_samples = np.array(n_samples)
     return avg_spectra, dly, n_samples
+    
