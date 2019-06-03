@@ -1,7 +1,7 @@
 
 import numpy as np
 
-def average_spectra_cumul(uvp, blps, spw, pol, mode='time', min_samples=1, 
+def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1, 
                           shuffle=False, time_avg=True, verbose=False):
     """
     Cumulatively average a set of delay spectra as a function of time 
@@ -17,8 +17,8 @@ def average_spectra_cumul(uvp, blps, spw, pol, mode='time', min_samples=1,
         List of blpair ints or tuples. Only one redundant set of 
         blpairs should be passed at once.
     
-    spw, pol : int, str
-        Spectral window ID (integer) and polarization (integer) of 
+    spw, polpair : int, str
+        Spectral window ID (integer) and polarization-pair (integer or str) of 
         the power spectra to average.
     
     mode : str, optional
@@ -77,7 +77,7 @@ def average_spectra_cumul(uvp, blps, spw, pol, mode='time', min_samples=1,
         
         # Perform initial downselect of times and blpairs (and make copy)
         uvp_t = uvp.select(times=avail_times[:], blpairs=blps, inplace=False, 
-                           spws=[spw,], pols=[pol,])
+                           spws=[spw,], polpairs=[polpair,])
         
         # Loop over times (in reverse size order)
         avg_spectra = []; n_samples = []

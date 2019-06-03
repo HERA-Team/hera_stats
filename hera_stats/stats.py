@@ -46,10 +46,10 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
     # iterate over spectral windows
     for i, spw in enumerate(uvp.spw_array):
         # iterate over polarizations
-        for j, pol in enumerate(uvp.pol_array):
+        for j, polpair in enumerate(uvp.polpair_array):
             # iterate over blpairs
             for k, blp in enumerate(uvp.blpair_array):
-                key = (spw, blp, pol)
+                key = (spw, blp, polpair)
 
                 # calculate z-score: real and imag separately
                 d = uvp.get_data(key)

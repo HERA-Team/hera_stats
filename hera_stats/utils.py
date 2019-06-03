@@ -31,7 +31,7 @@ def bin_wrap(angles, n):
     ha = np.hstack([angles-360, angles])
 
     isindeg = [bool(sum((ha > degs[i]) * (ha < degs[i+1]))) for i in range(len(degs)-1)]
-    longest = None
+    longest = -1
     rng = None
     for i, val in enumerate(isindeg):
         if val == True:

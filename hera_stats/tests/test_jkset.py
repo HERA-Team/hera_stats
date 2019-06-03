@@ -34,7 +34,7 @@ class Test_JKSet(unittest.TestCase):
         
         nt.assert_false(jk == jk2)
         nt.assert_true(jk == jk.add(jk2, axis=1, inplace=False)[:, :2])
-        print jk
+        print(jk)
 
         jk2.set_data(jk.spectra, jk.errs, error_field='bs_std')
         nt.assert_true(jk == jk2)
