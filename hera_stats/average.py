@@ -65,8 +65,9 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
     if mode == 'time':
         # Get unique times from UVPSpec object
         avail_times = np.unique(uvp.time_1_array)
-        if avail_times.size < min_samples:
-            raise ValueError("min_samples is larger than the number of available samples.")
+        if avail_times.size <= min_samples:
+            raise ValueError("min_samples is larger than or equal to the number "
+                             "of available samples.")
         if verbose: print("Unique time samples:", avail_times.size)
         
         # Either shuffle or sort available times
@@ -101,9 +102,9 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
         uvp_b = uvp.select(blpairs=blps, inplace=False, spws=[spw,], 
                            polpairs=[polpair,])
         avail_blps = np.unique(uvp_b.blpair_array) # available blpairs
-        if avail_blps.size < min_samples:
-            raise ValueError("min_samples is larger than the number of "
-                             "available samples.")
+        if avail_blps.size <= min_samples:
+            raise ValueError("min_samples is larger than or equal to the number "
+                             "of available samples.")
         if verbose: print("Unique blpairs:", avail_blps.size)
         
         # Either shuffle or sort available blpairs
