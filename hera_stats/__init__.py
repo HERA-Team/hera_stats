@@ -2,6 +2,7 @@
 from . import jackknives
 from . import plots
 from . import stats
+from . import automate
 from . import testing
 from . import version
 from .jkset import JKSet
