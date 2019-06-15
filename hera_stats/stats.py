@@ -2,9 +2,10 @@ import numpy as np
 import pickle as pkl
 from scipy import stats as spstats
 import hera_pspec as hp
-import utils
+from . import utils
 import copy 
-import jkset as jkset_lib
+from . import jkset as jkset_lib
+from functools import reduce
 
 
 def uvp_zscore(uvp, error_field='bs_std', inplace=False):
@@ -38,17 +39,17 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
         uvp = copy.deepcopy(uvp)
 
     # check error_field
-    assert error_field in uvp.stats_array.keys(), "{} not found in stats_array" \
+    assert error_field in list(uvp.stats_array.keys()), "{} not found in stats_array" \
            .format(error_field)
     new_field = "{}_zscore".format(error_field)
 
     # iterate over spectral windows
     for i, spw in enumerate(uvp.spw_array):
         # iterate over polarizations
-        for j, pol in enumerate(uvp.pol_array):
+        for j, polpair in enumerate(uvp.polpair_array):
             # iterate over blpairs
             for k, blp in enumerate(uvp.blpair_array):
-                key = (spw, blp, pol)
+                key = (spw, blp, polpair)
 
                 # calculate z-score: real and imag separately
                 d = uvp.get_data(key)
@@ -206,6 +207,7 @@ def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
         key1[axis[0]] = 0
         key2 = copy.deepcopy(key1)
         key2[axis[0]] = 1
+        key1 = tuple(key1); key2 = tuple(key2)
 
         # Calculate combined error and sum of zscores
         comberr = np.sqrt(errs[key1]**2 + errs[key2]**2).clip(10**-10, np.inf)
@@ -285,7 +287,7 @@ def kstest(jkset, summary=False, cdf=None, verbose=False):
 
         if verbose:
             st = ["pass", "fail"][isfailed]
-            print "%.1f, %s" % (jkset.dlys[i], st)
+            print("%.1f, %s" % (jkset.dlys[i], st))
 
     # Return proper data
     if summary == False:
@@ -345,15 +347,15 @@ def anderson(jkset, summary=False, verbose=False):
         stat_l += [stat]
 
     if verbose:
-        print "Samples: %i" % len(stat_l)
+        print("Samples: %i" % len(stat_l))
 
     # Print and save failure rates for each significance level
     fracs = []
     for i in range(5):
         frac = float(sum(np.array(stat_l) >= crit[i]))/len(stat_l) * 100
         if verbose:
-            print ("Significance level: %.1f \tObserved "
-                   "Failure Rate: %.1f" % (sig[i], frac))
+            print("Significance level: %.1f \tObserved "
+                  "Failure Rate: %.1f" % (sig[i], frac))
         fracs += [frac]
 
     # Return if specified
