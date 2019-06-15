@@ -207,6 +207,7 @@ def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
         key1[axis[0]] = 0
         key2 = copy.deepcopy(key1)
         key2[axis[0]] = 1
+        key1 = tuple(key1); key2 = tuple(key2)
 
         # Calculate combined error and sum of zscores
         comberr = np.sqrt(errs[key1]**2 + errs[key2]**2).clip(10**-10, np.inf)

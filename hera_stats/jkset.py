@@ -7,22 +7,24 @@ class JKSet(object):
 
     def __init__(self, pc_uvp, jktype, error_field="bs_std"):
         """
-        JKSet is a class to handle sets of single spectra outputted by jackknives
-        and usable for other purposes. At the core is a list of UVPSpecs with single
-        spectra, which JKSet uses to create an array of spectra. One can load a
-        PSpecContainer or a 2D list of UVPSpecs, and easily access the spectra for
-        plotting and statistical purposes.
+        JKSet is a class to handle sets of single spectra outputted by 
+        jackknives and usable for other purposes. At the core is a list of 
+        UVPSpecs with single spectra, which JKSet uses to create an array of 
+        spectra. One can load a PSpecContainer or a 2D list of UVPSpecs, and 
+        easily access the spectra for plotting and statistical purposes.
 
         Parameters
         ----------
         pc_uvp: PSpecContainer or 2D list
-            The input for the JKSet. Each UVPSpec in either the container or the list
-            must contain only one spectrum, and a stats_array entry "error_field"
+            The input for the JKSet. Each UVPSpec in either the container or 
+            the list must contain only one spectrum, and a stats_array entry 
+            "error_field".
 
         jktype: string, optional
-            If this comes from a jackknife, especially when loading from a container,
-            jktype must be specified. It is used to extract data from the container,
-            whose UVPSpecs are named by the jackknife type. Default: "None".
+            If this comes from a jackknife, especially when loading from a 
+            container, jktype must be specified. It is used to extract data 
+            from the container, whose UVPSpecs are named by the jackknife type. 
+            Default: "None".
         """
         # Load PSpecContainer
         if isinstance(pc_uvp, hp.container.PSpecContainer):
@@ -58,11 +60,12 @@ class JKSet(object):
         all_jktypes = np.unique([a[0] for a in jkf_groups])
 
         # Get specific jackknive type
-        assert jktype in all_jktypes, "Specified jackknife type not found in container."
+        assert jktype in all_jktypes, \
+            "Specified jackknife type not found in container."
         all_jkfs = [j for j in jkf_groups if j[0] == jktype]
 
-        # Create dictionary so that the indices can be sorted while still maintaining
-        # the correct spectra
+        # Create dictionary so that the indices can be sorted while still 
+        # maintaining the correct spectra
         refdic = {}
         jkf_groups = [[int(a[1]), int(a[2])] for a in all_jkfs]
         for n, i in jkf_groups:
