@@ -2,10 +2,14 @@ language: python
 python:
   # We don't actually use the Travis Python, but this keeps it organized.
   - "2.7"
+  - "3.6"
 
 # Cache pip-installed dependencies
 cache:
     pip: true
+
+services:
+  - xvfb
 
 install:
   # ensure that we have the full tag information available for version.py
@@ -27,9 +31,16 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy nose pip matplotlib coverage scikit-learn h5py
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy nose pip matplotlib coverage h5py
   - source activate test-environment
-  - conda install -c conda-forge aipy
+  - conda install -c conda-forge healpy aipy
+  - pip install pyyaml
+  - pip install multiprocess
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      pip install scikit-learn==0.20.3;
+    else
+      pip install scikit-learn;
+    fi
   - pip install coveralls
   - pip install git+https://github.com/HERA-Team/pyuvdata.git
   - pip install git+https://github.com/HERA-Team/omnical.git
@@ -37,19 +48,11 @@ install:
   - pip install git+https://github.com/HERA-Team/hera_qm.git
   - pip install git+https://github.com/HERA-Team/uvtools.git
   - pip install git+https://github.com/HERA-Team/hera_cal.git
-  - pip install healpy
-  - pip install scikit-learn
-  - pip install h5py
-  - pip install pyyaml
-  - pip install multiprocess
   - pip install git+https://github.com/HERA-Team/hera_pspec.git
   - python setup.py install
 
 before_script:
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
   - "export MPLBACKEND=agg"
-  - sleep 3
 
 script: nosetests hera_stats --with-coverage --cover-package=hera_stats
 

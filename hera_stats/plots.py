@@ -92,7 +92,7 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
 
         # Calculate yticks.
         zmt = zlim//2*2
-        ticks = range(-zmt, zmt+1, 2)
+        ticks = list(range(-zmt, zmt+1, 2))
 
         # Reinstate limits and set other paramters
         ax2.set_ylim(-zlim, zlim)
@@ -150,7 +150,7 @@ def scatter(jkset, ax=None, ylim=None, compare=True, logscale=True):
         colors = np.hstack(colors)
 
         # Shuffle order so colors are randomly in front or behind others
-        inds = range(len(x))
+        inds = list(range(len(x)))
         shuffle = np.random.choice(inds, len(inds)-1, replace=False)
 
         xrand, yrand, crand = [], [], []

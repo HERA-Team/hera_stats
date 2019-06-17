@@ -3,7 +3,7 @@ import hera_pspec as hp
 from pyuvdata import UVData
 import copy
 import os
-import utils
+from . import utils
 import astropy.coordinates as cp
 
 
@@ -45,7 +45,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
 
     # Load all baselines in uvp
     bl_array = np.unique([uvp.antnums_to_bl(bl) for blp in uvp.get_blpairs() for bl in blp])
-    blns = map(uvp.bl_to_antnums, bl_array)
+    blns = list(map(uvp.bl_to_antnums, bl_array))
     ants = np.unique(blns)
 
     groups = []
@@ -53,7 +53,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
     for i in range(n_jacks):
 
         if verbose:
-            print "Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks)
+            print("Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks))
         c = 0
         blglen = 0
         while blglen <= len(blns)//6 or blglen <= minlen:
@@ -79,7 +79,7 @@ def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
 
         blgroups = []
         for b in blg:
-            inds = np.random.choice(range(len(b)), blglen, replace=False)
+            inds = np.random.choice(list(range(len(b))), blglen, replace=False)
             blgroups.append([uvp.antnums_to_bl(b[i]) for i in inds])
 
         # Split uvp by groups
@@ -213,7 +213,7 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
         uvp.select(bls=bls, inplace=True)
 
     # Create reference lst -> time_avg dictionary (for sorting).
-    ref = dict(zip(uvp.lst_avg_array, uvp.time_avg_array))
+    ref = dict(list(zip(uvp.lst_avg_array, uvp.time_avg_array)))
     rads = np.unique(uvp.lst_avg_array)
 
     # Get telescope location information
@@ -321,8 +321,8 @@ def omit_ants(uvp, ant_nums=None, bls=None):
 
     uvp_list = []
     for i, bl in enumerate(bl_list):
-        inds = np.random.choice(range(len(bl)), minlen, replace=False)
-        bl_i = np.array(map(uvp.antnums_to_bl, bl))[inds]
+        inds = np.random.choice(list(range(len(bl))), minlen, replace=False)
+        bl_i = np.array(list(map(uvp.antnums_to_bl, bl)))[inds]
         uvp1 = uvp.select(bls=bl_i, inplace=False)
         uvp1.labels = np.array([ant_nums[i]])
         uvp1.jktype = "omit_ants"
@@ -365,3 +365,69 @@ def sep_files(uvp, filenames):
 
     return uvp_list
 
+
+def split_blps_by_antnum(blps, split='norepeat'):
+    """
+    Split a list of redundant groups of baseline-pairs into two; 
+    one where the same antenna is never used more than once in 
+    a blpair, and one where it is.
+    
+    Parameters
+    ----------
+    blps : list of list of blpairs
+        List of redundant groups of baseline-pairs. The blps can 
+        be either tuples of tuples, or blpair integers.
+    
+    split : str, optional
+        Type of split to perform on each baseline group. Available  
+        options are:
+        
+        - 'norepeat':
+            Split into one group where antennas are used at most 
+            once per blpair, and another where they are used 
+            more than once.
+            
+        - 'noauto': 
+            Split into one group with auto-blpairs and one group 
+            with non-autos (but antennas can be used more than 
+            once per blpair).
+         
+         
+    Returns
+    -------
+    blps_a, blps_b : list of list of blpairs
+        List of redundant groups of baseline-pairs.
+    """
+    if split not in ['norepeat',]:
+        raise ValueError("split type '%s' not recognized." % split)
+    
+    # Loop over redundant groups
+    blps_a, blps_b = [], []
+    for grp in blps:
+        
+        # Loop over baseline-pairs
+        grp_a, grp_b = [], []
+        for blp in grp:
+            
+            # Convert into antnum pairs if not already
+            if isinstance(blp, int):
+                blp = uvp.blpair_to_antnums(blp)
+            
+            # Split according to whether antenna numbers are repeated
+            if split == 'norepeat':
+                # Split out 
+                if np.unique(blp).size == 4:
+                    grp_a.append(blp)
+                else:
+                    grp_b.append(blp)
+            elif split == 'noauto':
+                # Split out blpairs being multiplied by themselves
+                if sorted(blp[0]) == sorted(blp[1]):
+                    grp_a.append(blp)
+                else:
+                    grp_b.append(blp)
+            
+        blps_a.append(grp_a)
+        blps_b.append(grp_b)
+        
+    return blps_a, blps_b
