@@ -155,6 +155,6 @@ def jupyter_run_notebook(tree=None, fname=None, outfile=None, rundir='.',
     finally:
         # Write notebook file to disk if outfile specified
         if outfile is not None:
-            with open(outfile, mode='w', encoding='utf-8') as f:
+            with open(outfile, mode='w') as f:
                 nbformat.write(nb, f)
     

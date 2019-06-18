@@ -68,6 +68,9 @@ class test_automate():
                          )
         nt.assert_raises(CellExecutionError, hs.automate.jupyter_run_notebook, 
                          tree=nb, outfile=self.outfile3, rundir='/tmp')
+        
+        nt.assert_raises(ValueError, hs.automate.jupyter_run_notebook, 
+                         tree=nb, fname="test")
 
 if __name__ == "__main__":
     unittest.main()
