@@ -68,7 +68,7 @@ def jupyter_replace_tags(fname_tmpl, replace, outfile=None, overwrite=False,
                 if tags is None: continue # ignore floating '@' symbols
                 
                 # Get tag name (only keep first if >1 found)
-                tag = tags[0][1:]
+                tag = tags.group(0)[1:]
             
                 # Check if tag exists in replace dict and then do replacement
                 if tag in replace.keys():
