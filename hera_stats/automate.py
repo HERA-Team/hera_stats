@@ -1,9 +1,13 @@
 import numpy as np
 import json
 import os, copy, re
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor, CellExecutionError
 
+# Fail gracefully if jupyter package is not installed
+try:
+    import nbformat
+    from nbconvert.preprocessors import ExecutePreprocessor, CellExecutionError
+except:
+    print("WARNING: hera_stats.automate: jupyter is not installed; jupyter notebook automation disabled.")
 
 def jupyter_replace_tags(fname_tmpl, replace, outfile=None, overwrite=False, 
                          verbose=False):
@@ -128,6 +132,13 @@ def jupyter_run_notebook(tree=None, fname=None, outfile=None, rundir='.',
     kernel : str, optional
         Name of Jupyter Python kernel to use. Default: 'python3'.
     """
+    # Check that nbformat is installed
+    try:
+        ver = nbformat.__version__
+    except:
+        raise NotImplementedError("The 'jupyter' package must be installed "
+                                  "to use this function.")
+    
     # Check for valid arguments
     if (tree is None and fname is None) \
     or (tree is not None and fname is not None):

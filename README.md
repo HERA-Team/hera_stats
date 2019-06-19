@@ -19,6 +19,10 @@ For usage examples and documentation, see http://hera-stats.readthedocs.io/en/la
 * hera_pspec (https://github.com/HERA-Team/hera_pspec.git)
 * hdf5
 
+Optionally, if you want to make use of the Jupyter notebook automation features 
+in the `hera_pspec.automate` module:
+* jupyter (`pip install jupyter`)
+
 For anaconda users, we suggest using conda to install numpy.
 
 ### Installing hera_stats
