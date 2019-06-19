@@ -19,8 +19,8 @@ class test_average():
     
     def test_average_spectra_cumul(self):
         
-        # get list of unique blps
-        blps = np.unique(self.uvp.blpair_array)
+        # Get list of unique blps
+        blps = [blp for blp in np.unique(self.uvp.blpair_array)]
         
         # Check basic operation of cumulative-in-time mode
         ps, dly, nsamples = hs.average.average_spectra_cumul(
