@@ -2,6 +2,7 @@
 from . import jackknives
 from . import plots
 from . import stats
+from . import automate
 from . import average
 from . import flag
 from . import testing
