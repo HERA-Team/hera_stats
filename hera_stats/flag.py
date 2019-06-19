@@ -31,7 +31,8 @@ def apply_random_flags(uvd, flag_frac, seed=None, inplace=False,
     zero_flagged_data : bool, optional
         Whether to set the flagged channels in the data_array to 
         zero. This is useful for identifying functions that are 
-        ignoring the mask.
+        ignoring the mask. All flagged data will be zeroed, not 
+        just the new flags added by this function.
     
     Returns
     -------
@@ -60,5 +61,5 @@ def apply_random_flags(uvd, flag_frac, seed=None, inplace=False,
     # Apply flags
     new_uvd.flag_array[:,:,flagged,:] = True
     if zero_flagged_data:
-        new_uvd.data_array[:,:,flagged,:] = 0.
+        new_uvd.data_array[new_uvd.flag_array] = 0.
     return new_uvd
