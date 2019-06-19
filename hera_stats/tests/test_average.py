@@ -45,6 +45,12 @@ class test_average():
                                 time_avg=True, verbose=False)
         nt.assert_equal(ps.shape, (self.uvp.Nblpairs-1, self.uvp.Ndlys))
         
+        # Now verbose, and with shuffle
+        ps, dly, nsamples = hs.average.average_spectra_cumul(
+                                self.uvp, blps, spw=0, polpair=('xx', 'xx'), 
+                                mode='blpair', min_samples=1, shuffle=True, 
+                                time_avg=True, verbose=True)
+        
         # Same as above, but without time averaging
         ps, dly, nsamples = hs.average.average_spectra_cumul(
                                 self.uvp, blps, spw=0, polpair=('xx', 'xx'), 
@@ -60,8 +66,30 @@ class test_average():
                                 mode='time', min_samples=min_samp, shuffle=False, 
                                 time_avg=True, verbose=False)
         nt.assert_equal(ps.shape, (self.uvp.Ntimes-min_samp, self.uvp.Ndlys))
-
-
+        
+        # Check for expected errors
+        
+        # Invalid mode
+        nt.assert_raises(ValueError, hs.average.average_spectra_cumul, 
+                         self.uvp, blps, spw=0, polpair=('xx', 'xx'), 
+                         mode='something', shuffle=False, time_avg=True, 
+                         verbose=False)
+        
+        # Invalid blps
+        nt.assert_raises(TypeError, hs.average.average_spectra_cumul, 
+                         self.uvp, [[(1,2)],], spw=0, polpair=('xx', 'xx'), 
+                         mode='time', shuffle=False, time_avg=True, 
+                         verbose=False)
+        
+        # If min_samples > no. samples for time and blpair modes
+        nt.assert_raises(ValueError, hs.average.average_spectra_cumul, 
+                         self.uvp, blps, spw=0, polpair=('xx', 'xx'), 
+                         mode='time', min_samples=1000000000, shuffle=False, 
+                         time_avg=True, verbose=False)
+        nt.assert_raises(ValueError, hs.average.average_spectra_cumul, 
+                         self.uvp, blps, spw=0, polpair=('xx', 'xx'), 
+                         mode='blpair', min_samples=1000000000, shuffle=False, 
+                         time_avg=True, verbose=False)
 if __name__ == "__main__":
     unittest.main()
 

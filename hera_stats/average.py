@@ -56,7 +56,7 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
         Number of times or blpairs that went into each average in 
         the ps array.
     """
-    # Chekc for valid mode
+    # Check for valid mode
     if mode not in ['time', 'blpair']:
         raise ValueError("mode must be either 'time' or 'blpair'.")
     
