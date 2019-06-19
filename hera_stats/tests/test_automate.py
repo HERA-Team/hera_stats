@@ -1,10 +1,9 @@
 import hera_stats as hs
 import nose.tools as nt
-import os
+import os, sys
 from hera_stats.data import DATA_PATH
 from nbconvert.preprocessors import CellExecutionError
 import unittest
-
 
 class test_automate():
 
@@ -12,6 +11,12 @@ class test_automate():
         self.template = os.path.join(DATA_PATH, "Example_template_notebook.ipynb")
         self.outfile2 = os.path.join(DATA_PATH, "Example_template_notebook2.ipynb")
         self.outfile3 = os.path.join(DATA_PATH, "Example_template_notebook3.ipynb")
+        
+        # Python version
+        if sys.version_info[0] == 2:
+            self.pyversion = "python2"
+        else:
+            self.pyversion = "python3"
     
     def tearDown(self):
         if os.path.exists(self.outfile2):
@@ -59,18 +64,20 @@ class test_automate():
         # Check that basic functionality works
         hs.automate.jupyter_run_notebook(fname=self.template, 
                                          outfile=self.outfile3, 
-                                         rundir=DATA_PATH)
+                                         rundir=DATA_PATH,
+                                         kernel=self.pyversion)
         
         # Check that example notebook fails and that error is caught
         nb = hs.automate.jupyter_replace_tags(
                          self.template,  
-                         replace={'datafile': 'file_doesnt_exist.txt'},
+                         replace={'datafile': 'file_doesnt_exist.txt'}
                          )
         nt.assert_raises(CellExecutionError, hs.automate.jupyter_run_notebook, 
-                         tree=nb, outfile=self.outfile3, rundir='/tmp')
+                         tree=nb, outfile=self.outfile3, rundir='/tmp', 
+                         kernel=self.pyversion)
         
         nt.assert_raises(ValueError, hs.automate.jupyter_run_notebook, 
-                         tree=nb, fname="test")
+                         tree=nb, fname="test", kernel=self.pyversion)
 
 if __name__ == "__main__":
     unittest.main()

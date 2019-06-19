@@ -98,7 +98,7 @@ def jupyter_replace_tags(fname_tmpl, replace, outfile=None, overwrite=False,
 
 
 def jupyter_run_notebook(tree=None, fname=None, outfile=None, rundir='.', 
-                         version=4, kernel_name='python3'):
+                         version=4, kernel='python3'):
     """
     Run a Jupyter notebook programatically. The notebook to run can be passed 
     as either a filename or a dict derived from JSON data.
@@ -125,7 +125,7 @@ def jupyter_run_notebook(tree=None, fname=None, outfile=None, rundir='.',
     version : int, optional
         Version of Jupyter notebooks to use.
     
-    kernel_name : str, optional
+    kernel : str, optional
         Name of Jupyter Python kernel to use. Default: 'python3'.
     """
     # Check for valid arguments
@@ -145,7 +145,7 @@ def jupyter_run_notebook(tree=None, fname=None, outfile=None, rundir='.',
     nbformat.validate(nb)
     
     # Initialise notebook preprocessor object
-    execp = ExecutePreprocessor(timeout=600, kernel_name=kernel_name)
+    execp = ExecutePreprocessor(timeout=600, kernel_name=kernel)
     
     # Try to execute notebook; raise error if it fails
     try:
