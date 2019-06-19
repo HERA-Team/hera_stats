@@ -30,7 +30,8 @@ setup_args = {
     'packages':     ['hera_stats'],
     'package_dir':  {'hera_stats': 'hera_stats'},
     'package_data': {'hera_stats': data_files},
-    'install_requires': ['numpy>=1.10', 'scipy>=0.19',],
+    'install_requires': ['numpy>=1.10', 'scipy>=0.19', 'matplotlib',],
+    'extras_require': {'automate': ['jupyter',]},
     'include_package_data': True,
     'zip_safe':     False,
 }
