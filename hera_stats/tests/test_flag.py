@@ -38,3 +38,7 @@ class test_flag():
         uvd2 = hs.flag.apply_random_flags(self.uvd, 0.3, seed=10)
         np.testing.assert_almost_equal(uvd1.flag_array, uvd2.flag_array)
         
+        # Check that in-place works
+        uvd1 = hs.flag.apply_random_flags(self.uvd, 0.3, seed=10)
+        hs.flag.apply_random_flags(self.uvd, 0.3, seed=10, inplace=True)
+        np.testing.assert_almost_equal(uvd1.flag_array, self.uvd.flag_array)

@@ -24,4 +24,7 @@ class test_flag():
         # Check that basic functionality works
         rms, rms_mod = hs.noise.estimate_noise_rms(self.uvd, bls, 
                                                    fit_poly=True, order=2)
+        nt.assert_true(np.all(np.isfinite(rms_mod)))
         
+        # Check that not fitting polynomial is sensible too
+        rms = hs.noise.estimate_noise_rms(self.uvd, bls, fit_poly=False)
