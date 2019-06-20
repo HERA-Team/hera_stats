@@ -56,11 +56,15 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
         Number of times or blpairs that went into each average in 
         the ps array.
     """
+    # Check for valid mode
     if mode not in ['time', 'blpair']:
         raise ValueError("mode must be either 'time' or 'blpair'.")
     
-    if not isinstance(blps[0], tuple) and not isinstance(blps[0], int):
-        raise TypeError("blps must be a list of baseline-pair tuples or integers only.")
+    # Check for valid blpair format
+    if not (   isinstance(blps[0], tuple) 
+            or isinstance(blps[0], (int, np.integer, np.int))):
+        raise TypeError("blps must be a list of baseline-pair tuples or "
+                        "integers only.")
     
     if mode == 'time':
         # Get unique times from UVPSpec object
@@ -128,7 +132,8 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
             n_samples.append( np.unique(uvp_b.blpair_array).size )
             
             # Unpack data into array (spw=0 since we only selected one spw)
-            ps = _avg.get_data((0, _avg.blpair_array[0], polpair)).flatten()
+            ps = _avg.get_data((0, _avg.blpair_array[0], polpair))
+            if time_avg: ps = ps.flatten() # remove extra dim if time_avg=true
             avg_spectra.append(ps)
             dly = _avg.get_dlys(0)
         

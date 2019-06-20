@@ -1,30 +1,35 @@
-import os
+import numpy as np
+import hera_pspec as hp
 import hera_stats as hs
 from hera_stats.data import DATA_PATH
+import os
 import nose.tools as nt
-import numpy as np
-import copy
-import hera_pspec as hp
-from pyuvdata import UVData
-import shutil
 import unittest
 
 
-def test_make_uvp_data():
-    # specify names
-    uvp_data_name = "testing_uvp_data.h5"
-    jack_data_name = "testing_jack_data.h5"
+class test_testing():
 
-    hs.testing.make_uvp_data(jack_psc_name=jack_data_name, uvp_psc_name=uvp_data_name, overwrite=True)
+    def setUp(self):
+        self.uvp_data_name = os.path.join(DATA_PATH, "testing_uvp_data.h5")
+        self.jack_data_name = os.path.join(DATA_PATH, "testing_jack_data.h5")
+    
+    def tearDown(self):
+        if os.path.exists(self.uvp_data_name):
+            os.remove(self.uvp_data_name)
+        if os.path.exists(self.jack_data_name):
+            os.remove(self.jack_data_name)
 
-    nt.assert_true(os.path.exists(uvp_data_name))
-    nt.assert_true(os.path.exists(jack_data_name))
+    def test_make_uvp_data(self):
+    
+        hs.testing.make_uvp_data(jack_psc_name=self.jack_data_name, 
+                                 uvp_psc_name=self.uvp_data_name, 
+                                 overwrite=True)
+        
+        nt.assert_true(os.path.exists(self.uvp_data_name))
+        nt.assert_true(os.path.exists(self.jack_data_name))
 
-    uvp_psc = hp.PSpecContainer(uvp_data_name, mode='r')
-    nt.assert_equal(len(uvp_psc.spectra('IDR2_1')), 2)
+        uvp_psc = hp.PSpecContainer(self.uvp_data_name, mode='r')
+        nt.assert_equal(len(uvp_psc.spectra('IDR2_1')), 2)
 
-    jack_psc = hp.PSpecContainer(jack_data_name, mode='r')
-    nt.assert_equal(len(jack_psc.spectra("jackknives")), 26)
-
-    os.remove(uvp_data_name)
-    os.remove(jack_data_name)
+        jack_psc = hp.PSpecContainer(self.jack_data_name, mode='r')
+        nt.assert_equal(len(jack_psc.spectra("jackknives")), 26)

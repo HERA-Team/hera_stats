@@ -40,7 +40,7 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
     for bl in bls:
         
         # Get data
-        data = uvd.get_data(bls)
+        data = uvd.get_data(bl)
     
         # Calculate sigma_rms as function of freq, for real and imag parts
         sigma_noise = 0. + 0.j; sigma_model = 0. + 0.j
@@ -51,7 +51,7 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
             
             # Get indices of masked data
             idxs = np.where(sigma_rms != 0.) # flagged channels have diff = 0
-            sigma_rms[np.where(sigma_rms == 0.)] = np.nan # set flagged channel rms = nan
+            sigma_rms[np.where(sigma_rms == 0.)] = np.nan # flagged chan rms = nan
             sigma_noise += factor * sigma_rms
             
             # Fit polynomial to sigma_rms if requested
@@ -65,6 +65,7 @@ def estimate_noise_rms(uvd, bls, fit_poly=True, order=2):
         if fit_poly: rms_model.append(sigma_model)
         
     # Convert to arrays and return
-    if fit_poly: return np.array(noise_rms), np.array(rms_model)
+    if fit_poly:
+        return np.array(noise_rms), np.array(rms_model)
     return np.array(sigma_rms)
     
