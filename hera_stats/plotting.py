@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import hera_pspec as hp
 from . import stats
 
 
@@ -53,7 +54,7 @@ def plot_delay_scatter(uvp, x_dly, y_dly, keys, mode='abs', label=None, ax=None)
     return ax
 
 
-def plot_redgrp_corrmat(self, corr, red_grp, cmap='RdBu', figsize=(30.,20.), 
+def plot_redgrp_corrmat(corr, red_grp, cmap='RdBu', figsize=(30.,20.), 
                         line_alpha=0.2):
     """
     Plot the correlation matrix for a set of delay spectra in a redundant 
@@ -97,12 +98,12 @@ def plot_redgrp_corrmat(self, corr, red_grp, cmap='RdBu', figsize=(30.,20.),
     fig = plt.figure()
     mat = plt.matshow(corr, cmap=cmap, vmin=-1., vmax=1.)
     plt.colorbar()
-    plt.title(r"$\tau = %3.1f$ ns, real" % (uvpI.get_dlys(0)[dly_idx]*1e9))
     ax = plt.gca()
     
     # Add label for each block of baseline-pairs
     # (items in each block have the same first bl in blpair)
-    bl1, bl2 = zip(*red_grp) # FIXME
+    blps = [hp.uvpspec_utils._blpair_to_bls(_blp) for _blp in red_grp]
+    bl1, bl2 = zip(*blps)
     unique_bls = np.unique(bl1)
     block_start_idx = [np.argmax(bl1 == _uniq) for _uniq in unique_bls]
     

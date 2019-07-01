@@ -380,11 +380,12 @@ def anderson(jkset, summary=False, verbose=False):
         return list(sig), fracs
 
 
-def redgrp_pspec_covariance(uvp, red_grp, spw, polpair, mode='cov', verbose=False):
+def redgrp_pspec_covariance(uvp, red_grp, dly_idx, spw, polpair, mode='cov', 
+                            verbose=False):
     """
     Calculate the covariance or correlation matrix for all pairs of delay 
-    spectra in a redundant group. The matrix is estimated by averaging over all 
-    LST samples.
+    spectra in a redundant group, for a single delay bin. The matrix is 
+    estimated by averaging over all LST samples.
     
     Parameters
     ----------
@@ -394,6 +395,9 @@ def redgrp_pspec_covariance(uvp, red_grp, spw, polpair, mode='cov', verbose=Fals
     red_grp : list
         List of redundant baseline pairs within a group.
     
+    dly_idx : int
+        Index of the delay bin to calculate the covariance matrix for.
+        
     spw : int
         Index of spectral window to use.
     
@@ -424,7 +428,7 @@ def redgrp_pspec_covariance(uvp, red_grp, spw, polpair, mode='cov', verbose=Fals
     for i, blp in enumerate(red_grp):
         if i % 100 == 0 and verbose:
             print("%d / %d" % (i, len(red_grp)))
-        dat[i] = uvp.get_data((spw, blp, polpair))[dly_idx]
+        dat[i] = uvp.get_data((spw, blp, polpair))[:,dly_idx]
     
     # Calculate covariance or correlation matrix    
     if mode == 'corr':

@@ -17,6 +17,11 @@ class Test_Stats(unittest.TestCase):
         filepath = os.path.join(DATA_PATH, "jack_data.h5")
         pc = hp.container.PSpecContainer(filepath)
         self.jkset = hs.JKSet(pc, "spl_ants")
+        
+        # Load example UVPSpec
+        filepath = os.path.join(DATA_PATH, "uvp_data.h5")
+        psc = hp.container.PSpecContainer(filepath, mode='r')
+        self.uvp = psc.get_pspec("IDR2_1")[0]
 
     def test_stats(self):
         hs.stats.weightedsum(self.jkset[0])
@@ -31,6 +36,25 @@ class Test_Stats(unittest.TestCase):
         hs.stats.anderson(zs.flatten())
         
         nt.assert_raises(NameError, hs.stats.zscores, self.jkset[0], z_method="ahhhhhhhhhhh!!!")
+    
+    
+    def test_redgrp_pspec_covariance(self):
+        
+        red_grps, red_lens, red_angs = self.uvp.get_red_blpairs()
+        grp = red_grps[0]
+        if isinstance(grp[0], tuple):
+            # FIXME: This would not be necessary if get_red_blpairs() returned 
+            # properly-formed blpair integers
+            grp = [int("%d%d" % _blp) for _blp in grp]
+        
+        # Calculate delay spectrum correlation matrix for redundant group and plot
+        corr_re, corr_im = hs.stats.redgrp_pspec_covariance(
+                                        self.uvp, grp, dly_idx=3, spw=0, 
+                                        polpair='xx', mode='corr', verbose=True)
+        # Check output
+        nt.assert_equal(corr_re.shape, (len(grp), len(grp)))
+        
+    
 
 def test_uvp_zscore():
     ## Get a gaussian noise UVPSpec ##
