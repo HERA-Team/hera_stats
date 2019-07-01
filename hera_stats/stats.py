@@ -378,3 +378,63 @@ def anderson(jkset, summary=False, verbose=False):
         return np.array(stat_l), np.array([list(crit)]*len(stat_l))
     else:
         return list(sig), fracs
+
+
+def redgrp_pspec_covariance(uvp, red_grp, spw, polpair, mode='cov', verbose=False):
+    """
+    Calculate the covariance or correlation matrix for all pairs of delay 
+    spectra in a redundant group. The matrix is estimated by averaging over all 
+    LST samples.
+    
+    Parameters
+    ----------
+    uvp : UVPSpec
+        Input UVPSpec object.
+    
+    red_grp : list
+        List of redundant baseline pairs within a group.
+    
+    spw : int
+        Index of spectral window to use.
+    
+    polpair : int or str or tuple
+        Polarization pair.
+    
+    mode : str, optional
+        Whether to calculate the covariance matrix ('cov') or correlation 
+        matrix ('corr'). Default: 'cov'.
+    
+    verbose : bool, optional
+        Whether to print status messages. Default: false.
+    
+    Returns
+    -------
+    cov_real, cov_imag : ndarrays
+        Real and imaginary covariance or correlation matrices, of shape 
+        (Nblps, Nblps).
+    """
+    # Check inputs
+    if mode not in ['cov', 'corr']:
+        raise ValueError("")
+    if not isinstance(red_grp, list):
+        raise TypeError("red_grp must be a list of blpairs.")
+    
+    # Load data to calculate covmat with
+    dat = np.zeros((len(red_grp), uvp.Ntimes), dtype=np.complex64)
+    for i, blp in enumerate(red_grp):
+        if i % 100 == 0 and verbose:
+            print("%d / %d" % (i, len(red_grp)))
+        dat[i] = uvp.get_data((spw, blp, polpair))[dly_idx]
+    
+    # Calculate covariance or correlation matrix    
+    if mode == 'corr':
+        # Correlation matrix
+        corr_re = np.corrcoef(dat.real)
+        corr_im = np.corrcoef(dat.imag)
+        return corr_re, corr_im
+    else:
+        # Covariance matrix
+        cov_re = np.cov(dat.real)
+        cov_im = np.cov(dat.imag)
+        return cov_re, cov_im
+
