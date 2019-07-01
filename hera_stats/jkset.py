@@ -374,7 +374,7 @@ def peek(pc):
     jktypes = np.unique(sp[:, 0])
     nj = [sum(sp[:, 0] == jkt) for jkt in jktypes]
     n = [sum((sp[:, 0] == jkt) * (sp[:, 1] == "0")) for jkt in jktypes]
-    shapes = [(nj[i]/n[i], n[i]) for i in range(len(n))]
+    shapes = [(nj[i]//n[i], n[i]) for i in range(len(n))]
 
     for shp, jkt in zip(shapes, jktypes):
         print("%s:" % jkt)

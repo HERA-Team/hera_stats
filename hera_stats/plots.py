@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from hera_stats import stats
-from hera_stats import utils
+from . import stats
+from . import utils
 
 
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,

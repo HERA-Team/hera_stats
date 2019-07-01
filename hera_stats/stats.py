@@ -63,15 +63,16 @@ def uvp_zscore(uvp, error_field='bs_std', inplace=False):
         return uvp
 
 
-def weightedsum(jkset, axis=0, error_field='bs_std'):
+def weighted_average(jkset, axis=0, error_field='bs_std'):
     """
-    Calculates the weighted sum average of the spectra over a specific axis.
-
-    The averages and errors are calculated in the following way:
-
-        avg_err = 1. / sum(err ** -2)
-        avg = avg_err * sum(x * err**-2)
-        std = sqrt(avg_err * len(x))
+    Calculates the variance-weighted average of the spectra over a specific 
+    axis. The averages and errors are calculated as follows (for spectra x_i 
+    with errors err_i):
+        
+        w_i = 1 / (err_i)^2
+        mean = \sum_i(w_i x_i) / \sum_i(w_i)
+        var_mean = 1. / sum_i(w_i)
+        std = sqrt(var_mean * len(x))
 
     Thus, std is not the uncertainty on the average but the standard deviation
     of the distribution of x.
@@ -82,7 +83,7 @@ def weightedsum(jkset, axis=0, error_field='bs_std'):
         JKSet with which to perform the weighted sum.
 
     axis: int, 0 or 1, optional
-        Axis along which to do the weighted sum. Default: all axes.
+        Axis along which to do the weighted sum. Default: 0.
 
     Returns
     -------
@@ -93,20 +94,29 @@ def weightedsum(jkset, axis=0, error_field='bs_std'):
     jk = copy.deepcopy(jkset)
 
     if isinstance(axis, int): axis = (axis,)
-    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
-    assert all([ax < jk.ndim for ax in axis]), "Axes %s was specified butn jkset has only axes <= %i." % (axis, jk.ndim - 1)
-
+    assert isinstance(jkset, jkset_lib.JKSet), \
+        "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert all([ax < jk.ndim for ax in axis]), \
+        "Axis %s was specified but jkset only has %d axes." % (axis, jk.ndim)
+    
+    print("jk.spectra:", jk.spectra.shape)
+    
     # Do weighted sum calculation
-    aerrs = 1. / np.sum(jk.errs ** -2, axis=axis)
-    av = aerrs * np.sum(jk.spectra * jk.errs**-2, axis=axis)
-    std = (aerrs * len(jk.spectra)) ** 0.5
+    w = 1. / jk.errs**2. # weights
+    var_avg = 1. / np.sum(w, axis=axis) # variance of weighted mean
+    avg = var_avg * np.sum(w * jk.spectra, axis=axis) # weighted mean
+    std = np.sqrt(var_avg * len(jk.spectra)) 
 
-    # Average or sum metadata
+    # Average/sum metadata, as appropriate
     nsamp = np.sum(jk.nsamples, axis=axis)
     integrations = np.average(jk.integrations, axis=axis)
     times = np.average(jk.times, axis=axis)
-
-    # IF the spectra were averaged down to a single spectrum, of shape (Ndlys,), expand to (1, Ndlys).
+    
+    print("av shape:", av.shape, times.shape, jk.times)
+    
+    # If the spectra were averaged down to a single spectrum, of shape (Ndlys,), 
+    # expand to (1, Ndlys).
+    """
     if len(av.shape[:-1]) == 0:
         targ_shape = (1, )
         av = av[None]
@@ -114,8 +124,9 @@ def weightedsum(jkset, axis=0, error_field='bs_std'):
         nsamp = nsamp[None]
         integrations = integrations[None]
         times = times[None]
-
-    # Slice jk to match shape of av and std
+    """
+    
+    # Slice jk to match shape of avg and std
     key = [0] * jk.ndim
     for i in range(jk.ndim):
         if i not in axis:
@@ -123,7 +134,7 @@ def weightedsum(jkset, axis=0, error_field='bs_std'):
     jkav = jk[tuple(key)]
 
     # Set average and error of jk
-    jkav.set_data(av, std, error_field=error_field)
+    jkav.set_data(avg, std, error_field=error_field)
 
     # Set UVPSpec attrs
     for i, uvp in enumerate(jkav._uvp_list):
@@ -135,6 +146,10 @@ def weightedsum(jkset, axis=0, error_field='bs_std'):
         uvp.labels = np.array(["Weighted Sum"])
 
     return jkav
+
+
+def weightedsum(jkset, axis=0, error_field='bs_std'):
+    return weighted_average(jkset, axis, error_field)
 
 
 def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
@@ -215,7 +230,7 @@ def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
 
         # Use weightedsum to shrink jkset to size, then replace data
         jkout = weightedsum(jkout, axis=axis, error_field=error_field)
-        #print jkout.shape, z.shape
+        print(jkout.shape, z.shape)
         jkout.set_data(z, 0*z, error_field=error_field)
     else:
         raise NameError("Z-score calculation method not recognized")
