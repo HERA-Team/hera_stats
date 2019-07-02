@@ -28,10 +28,10 @@ def shuffle (uvd, redgrps):
     
     # Shuffle baselines in each redgrp
     for grp in redgrps:
-        # Create a 3D zero array(new_data1)
+        # Create a 3D zero array for the ushuffled data
         unshuffled_data = np.zeros(((uvd.Ntimes , len(grp) , uvd.Nfreqs)), dtype=dtype)
 
-        #for the specific redgrps, get the data from same baesline grps with same vector and form a 3D array
+        # For the specific redgrps, get the data from same baesline grps with same vector and form a 3D array
         for b, key in enumerate(grp):
             unshuffled_data[:,b,:] = uvd.get_data(key)[:,:]
 
