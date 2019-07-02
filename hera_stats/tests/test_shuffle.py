@@ -1,7 +1,8 @@
 import numpy as np
 import hera_pspec as hp
 import hera_stats as hs
-from hera_stats.data import DATA_PATH
+from pyuvdata import UVData
+from hera_pspec.data import DATA_PATH as PSPEC_DATA_PATH
 import nose.tools as nt
 import os, sys
 import unittest
@@ -20,19 +21,20 @@ def check_if_sums_are_close(uvd1, uvd2, redgrps):
 class test_shuffle():
 
     def setUp(self):
-        # Load pre-computed power spectra
-        self.filepath = os.path.join(DATA_PATH, "uvp_data.h5")
-        pc = hp.container.PSpecContainer(self.filepath, mode='r')
-        self.uvp = pc.get_pspec("IDR2_1")[0]
+        # Load example UVData object
+        self.filepath = os.path.join(PSPEC_DATA_PATH, 
+                                     "zen.even.std.xx.LST.1.28828.uvOCRSA")
+        self.uvd = UVData()
+        self.uvd.read_miriad(self.filepath)
     
     def tearDown(self):
         pass
     
     def test_shuffle(self):
         # Check if the sums of all baselines are close before and after shuffle
-        redgrps, bl_lens, bl_angs = hp.utils.get_reds(self.uvp, pick_data_ants=True)
-        uvp_shuffled = hs.shuffle.shuffle(self.uvp, redgrps)        
-        sums_close = check_if_sums_are_close(self.uvp, uvp_shuffled, redgrps)
+        redgrps, bl_lens, bl_angs = hp.utils.get_reds(self.uvd, pick_data_ants=True)
+        uvd_shuffled = hs.shuffle.shuffle(self.uvd, redgrps)        
+        sums_close = check_if_sums_are_close(self.uvd, uvd_shuffled, redgrps)
         nt.assert_equal(sums_close, True)
         
         
