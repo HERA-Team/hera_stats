@@ -7,8 +7,25 @@ import nose.tools as nt
 import os, sys
 import unittest
 
+def get_data_redgrp (uvd, redgrp):
+    """
+    Get data from all bls in redgrp and output array of shape (Ntimes, Nbls, Nfreqs).
+    """
+    # Get data type of array
+    dtype = uvd.data_array.dtype
+    
+    # Create a 3D zero array
+    redgrp_data = np.zeros(((uvd.Ntimes , len(redgrp) , uvd.Nfreqs)), dtype=dtype)
+
+    # For the specific redgrps, get the data from baseline in redgrp
+    for b, key in enumerate(redgrp):
+        redgrp_data[:,b,:] = uvd.get_data(key)[:,:]
+    return redgrp_data
+
 def check_if_sums_are_close(uvd1, uvd2, redgrps):
-    # Get the redgrps
+    """
+    Check whether the sum of the data in the two UVData objects is the same for the specified redgrps.
+    """
     close = []
     for i,grp in enumerate(redgrps):            
         sum_uvd1 = np.sum(get_data_redgrp(uvd1, grp), axis=1)
