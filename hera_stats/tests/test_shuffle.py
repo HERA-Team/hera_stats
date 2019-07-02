@@ -7,29 +7,44 @@ import nose.tools as nt
 import os, sys
 import unittest
 
-def get_data_redgrp (uvd, redgrp):
+def get_data_redgrp(uvd, redgrp, array='data'):
     """
-    Get data from all bls in redgrp and output array of shape (Ntimes, Nbls, Nfreqs).
+    Get data from all bls in a redundant group and output into ndarray of shape 
+    (Ntimes, Nbls, Nfreqs, Npols).
     """
     # Get data type of array
-    dtype = uvd.data_array.dtype
+    if array == 'data':
+        dtype = uvd.data_array.dtype
+        fn = uvd.get_data
+    elif array == 'flag':
+        dtype = uvd.flag_array.dtype
+        fn = uvd.get_flags
+    elif array == 'nsamp':
+        dtype = uvd.nsample_array.dtype
+        fn = uvd.get_nsamples
+    else:
+        raise ValueError("array '%s' not recognized, must be 'data', 'flag', "
+                         "or 'nsamp'." % array)
     
     # Create a 3D zero array
-    redgrp_data = np.zeros(((uvd.Ntimes , len(redgrp) , uvd.Nfreqs)), dtype=dtype)
+    dshape = (uvd.Ntimes, len(redgrp), uvd.Nfreqs, uvd.Npols)
+    redgrp_arr = np.zeros(dshape, dtype=dtype)
 
-    # For the specific redgrps, get the data from baseline in redgrp
+    # Get the data for each baseline in the redgrp
     for b, key in enumerate(redgrp):
-        redgrp_data[:,b,:] = uvd.get_data(key)[:,:]
-    return redgrp_data
+        redgrp_arr[:,b,:,:] = fn(key, squeeze='none')[:,0,:,:]
+    return redgrp_arr
 
-def check_if_sums_are_close(uvd1, uvd2, redgrps):
+
+def check_if_sums_are_close(uvd1, uvd2, redgrps, array='data'):
     """
-    Check whether the sum of the data in the two UVData objects is the same for the specified redgrps.
+    Check whether the sum of the data, flags, or nsamples in two UVData objects 
+    is the same within each redgrp.
     """
     close = []
-    for i,grp in enumerate(redgrps):            
-        sum_uvd1 = np.sum(get_data_redgrp(uvd1, grp), axis=1)
-        sum_uvd2 = np.sum(get_data_redgrp(uvd2, grp), axis=1)
+    for i, grp in enumerate(redgrps):            
+        sum_uvd1 = np.sum(get_data_redgrp(uvd1, grp, array=array), axis=1)
+        sum_uvd2 = np.sum(get_data_redgrp(uvd2, grp, array=array), axis=1)
         close.append( np.allclose(sum_uvd1, sum_uvd2) )
     close = np.array(close)
     return np.all(close)
@@ -48,12 +63,21 @@ class test_shuffle():
         pass
     
     def test_shuffle(self):
-        # Check if the sums of all baselines are close before and after shuffle
-        redgrps, bl_lens, bl_angs = hp.utils.get_reds(self.uvd, pick_data_ants=True)
-        uvd_shuffled = hs.shuffle.shuffle(self.uvd, redgrps)        
-        sums_close = check_if_sums_are_close(self.uvd, uvd_shuffled, redgrps)
-        nt.assert_equal(sums_close, True)
         
+        # Get redundant groups
+        redgrps, bl_lens, bl_angs = hp.utils.get_reds(self.uvd, 
+                                                      pick_data_ants=True)
+        
+        # Shuffle samples between bls in each redgrp
+        uvd_shuffled = hs.shuffle.shuffle_data_redgrp(self.uvd, redgrps)
+        
+        # Check if summing the data over bls in each redgrp is invariant after 
+        # shuffling (sum should not have changed, as we are doing sampling 
+        # without replacement -> all samples conserved)
+        for arr in ['data', 'flag', 'nsamp']:
+            isclose = check_if_sums_are_close(self.uvd, uvd_shuffled, redgrps, 
+                                              array=arr)
+            nt.assert_equal(isclose, True)
         
 if __name__ == "__main__":
     unittest.main()
