@@ -1,7 +1,7 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from hera_stats import stats
-from hera_stats import utils
+from . import stats, utils
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
 
 
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
@@ -366,3 +366,130 @@ def plot_anderson(jkset, ax=None):
     ax.set_title("Anderson Darling Test by Delay Mode")
     ax.set_ylim(0, max(crit[0])*1.1)
     ax.grid(True)
+
+
+def long_waterfall(uvd_list, bl, pol, title, cmap='gray', starting_lst=[], 
+                   mode='nsamples'):
+    """    
+    Generates a waterfall plot of flags or nsamples with axis sums from an
+    input array
+
+    Parameters
+    ----------
+    uvd_list : list of UVData
+        list of UVData objects to be stacked and displayed
+    
+    bl : int or tuple
+        Baseline integer or antenna pair tuple of the baseline to plot.
+    
+    pol : str or int
+        Polarization string or integer.
+    
+    title : str
+        title of the plot
+    
+    cmap : str, optional
+        cmap parameter for the waterfall plot (default is 'gray')
+        
+    starting_lst : list, optional
+        list of starting lst to display in the plot
+    
+    mode : str, optional
+        Which array to plot from the UVData objects. Options: 'data', 'flags', 
+        'nsamples'. Default: 'nsamples'. 
+    
+    Returns
+    -------
+    main_waterfall : matplotlib.axes
+        Matplotlib Axes instance of the main plot
+        
+    freq_histogram : matplotlib.axes
+        Matplotlib Axes instance of the sum across times
+        
+    time_histogram : matplotlib.axes
+        Matplotlib Axes instance of the sum across freqs
+        
+    data : numpy.ndarray
+        A copy of the stacked_array output that is being displayed
+    """
+    # Construct key to access data
+    if isinstance(bl, (int, np.int)):
+        bl = uvd_list.baseline_to_antnums(bl)
+    key = (bl[0], bl[1], pol)
+    
+    # Get requested data
+    if mode == 'data':
+        arr_list = [uvd.get_data(key) for uvd in uvd_list]
+    elif mode == 'flags':
+        arr_list = [uvd.get_flags(key) for uvd in uvd_list]
+    elif mode == 'nsamples':
+        arr_list = [uvd.get_nsamples(key) for uvd in uvd_list]
+    else:
+        raise ValueError("mode '%s' not recognized." % mode)
+    
+    # Stack arrays into one big array
+    data = utils.stacked_array(arr_list)
+    
+    # Set up the figure and grid
+    fig = plt.figure()
+    fig.suptitle(title, fontsize=30, horizontalalignment='center')
+    grid = gridspec.GridSpec(ncols=10, nrows=15)
+    
+    # Create main components of figure
+    main_waterfall = fig.add_subplot(grid[0:14, 0:8])
+    freq_histogram = fig.add_subplot(grid[14:15, 0:8], sharex=main_waterfall)
+    time_histogram = fig.add_subplot(grid[0:14, 8:10], sharey=main_waterfall)
+    
+    # Set sizes
+    fig.set_size_inches(20, 80)
+    grid.tight_layout(fig)
+    counter = data.shape[0] // 60
+    
+    # Waterfall plot
+    main_waterfall.imshow(data, aspect='auto', cmap=cmap, 
+                          interpolation='none')
+    main_waterfall.set_ylabel('Integration Number')
+    main_waterfall.set_yticks(np.arange(0, counter*60 + 1, 30))
+    main_waterfall.set_ylim(60*(counter+1), 0)
+    
+    # Red lines separating files
+    for i in range(counter+1):
+        main_waterfall.plot(np.arange(data.shape[1]),
+                            60*i*np.ones(data.shape[1]), '-r')
+    for i in range(len(starting_lst)):
+        if not isinstance(starting_lst[i], str):
+            raise TypeError("starting_lst must be a list of strings")
+    
+    # Add text of filenames
+    if len(starting_lst) > 0:
+        for i in range(counter):
+            short_name = 'first\nintegration LST:\n'+starting_lst[i]
+            plt.text(-20, 26 + i*60, short_name, rotation=-90, size='small',
+                     horizontalalignment='center')
+    main_waterfall.set_xlim(0, data.shape[1])
+    
+    # Frequency sum plot
+    counts_freq = np.sum(data, axis=0)
+    max_counts_freq = max(np.amax(counts_freq), data.shape[0])
+    normalized_freq = 100 * counts_freq/max_counts_freq
+    freq_histogram.set_xticks(np.arange(0, data.shape[1], 50))
+    freq_histogram.set_yticks(np.arange(0, 101, 5))
+    freq_histogram.set_xlabel('Channel Number (Frequency)')
+    freq_histogram.set_ylabel('Occupancy %')
+    freq_histogram.grid()
+    freq_histogram.plot(np.arange(0, data.shape[1]), normalized_freq, 'r-')
+    
+    # Time sum plot
+    counts_times = np.sum(data, axis=1)
+    max_counts_times = max(np.amax(counts_times), data.shape[1])
+    normalized_times = 100 * counts_times/max_counts_times
+    time_histogram.plot(normalized_times, np.arange(data.shape[0]), 'k-',
+                        label='all channels')
+    time_histogram.set_xticks(np.arange(0, 101, 10))
+    time_histogram.set_xlabel('Flag %')
+    time_histogram.autoscale(False)
+    time_histogram.grid()
+    
+    # Returning the axes
+    return main_waterfall, freq_histogram, time_histogram, data
+
