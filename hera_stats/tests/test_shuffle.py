@@ -49,19 +49,13 @@ def check_if_sums_are_close(uvd1, uvd2, redgrps, array='data'):
     close = np.array(close)
     return np.all(close)
 
-def check_if_the_data_are_same(uvd1, uvd2, array='data'):
-    """
-    Check whether the two data_array in two UVDate object is the same.
-    """
-    close = np.allclose(uvd1.data_array, uvd2.data_array)
-    return close
 
 class test_shuffle():
 
     def setUp(self):
         # Load example UVData object
         self.filepath = os.path.join(PSPEC_DATA_PATH, 
-                                     "zen.even.std.xx.LST.1.28828.uvOCRSA")
+                                     "zen.even.xx.LST.1.28828.uvOCRSA")
         self.uvd = UVData()
         self.uvd.read_miriad(self.filepath)
     
@@ -85,9 +79,9 @@ class test_shuffle():
                                               array=arr)
             nt.assert_equal(isclose, True)
             
-        for arr in ['data', 'flag', 'nsamp']:
-            data_isclose = check_if_the_data_are_same(self.uvd, uvd_shuffled, array=arr)
-            nt.assert_equal(data_isclose, False)
+        # Check if data have actually been shuffled
+        close = np.allclose(self.uvd.data_array, uvd_shuffled.data_array)
+        nt.assert_equal(close, False)
         
 if __name__ == "__main__":
     unittest.main()
