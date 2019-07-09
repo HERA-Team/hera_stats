@@ -31,26 +31,11 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy nose pip matplotlib coverage h5py
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls jupyter
   - source activate test-environment
-  - conda install -c conda-forge healpy aipy
-  - pip install pyyaml
+  - conda env update -n test-environment -f environment.yml
   - pip install multiprocess
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      pip install scikit-learn==0.20.3;
-    else
-      pip install scikit-learn;
-    fi
-  - pip install coveralls
-  - pip install --upgrade jupyter
-  - pip install git+https://github.com/HERA-Team/pyuvdata.git
-  - pip install git+https://github.com/HERA-Team/omnical.git
-  - pip install git+https://github.com/HERA-Team/linsolve.git
-  - pip install git+https://github.com/HERA-Team/hera_qm.git
-  - pip install git+https://github.com/HERA-Team/uvtools.git
-  - pip install git+https://github.com/HERA-Team/hera_cal.git
-  - pip install git+https://github.com/HERA-Team/hera_pspec.git
-  - python setup.py install
+  - pip install .
 
 before_script:
   - "export MPLBACKEND=agg"
