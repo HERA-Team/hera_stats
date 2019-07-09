@@ -49,6 +49,12 @@ def check_if_sums_are_close(uvd1, uvd2, redgrps, array='data'):
     close = np.array(close)
     return np.all(close)
 
+def check_if_the_data_are_same(uvd1, uvd2, array='data'):
+    """
+    Check whether the two data_array in two UVDate object is the same.
+    """
+    close = np.allclose(uvd1.data_array, uvd2.data_array)
+    return close
 
 class test_shuffle():
 
@@ -78,6 +84,10 @@ class test_shuffle():
             isclose = check_if_sums_are_close(self.uvd, uvd_shuffled, redgrps, 
                                               array=arr)
             nt.assert_equal(isclose, True)
+            
+        for arr in ['data', 'flag', 'nsamp']:
+            data_isclose = check_if_the_data_are_same(self.uvd, uvd_shuffled, array=arr)
+            nt.assert_equal(data_isclose, False)
         
 if __name__ == "__main__":
     unittest.main()
