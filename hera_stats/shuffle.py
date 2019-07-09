@@ -42,7 +42,8 @@ def shuffle_data_redgrp(uvd, redgrps):
         Copy of `uvd` with baseline-shuffled visibilities.
     """
     # Check validity of inputs
-    if not isinstance(redgrps, list) or not isinstance(redgrps[0], list):
+    if not isinstance(redgrps, list) \
+    or not isinstance(redgrps[0], (list, np.ndarray)):
         raise TypeError("redgrps must be a list of lists of baseline identifiers.")
     assert isinstance(uvd, UVData), "uvd must be a UVData object."
     
@@ -85,13 +86,16 @@ def shuffle_data_redgrp(uvd, redgrps):
                     shuf_nsamp[t,:,i,p] = orig_nsamp[t,idxs,i,p]
         
         # Put shuffled data into new UVData object with the same shape etc.
-        for k in range (len(grp)):
+        for k in range(len(grp)):
             # Get idxs for each bl in the group
-            ant1, ant2 = grp[k]
+            bl = grp[k]
+            if not isinstance(bl, tuple):
+                bl = uvd.baseline_to_antnums(bl)
+            ant1, ant2 = bl
             idxs = uvd.antpair2ind(ant1, ant2)
-            uvd_new.data_array[idxs][:,0,:,:] = shuf_data[:,k,:,:]
-            uvd_new.flag_array[idxs][:,0,:,:] = shuf_flag[:,k,:,:]
-            uvd_new.nsample_array[idxs][:,0,:,:] = shuf_nsamp[:,k,:,:]
+            uvd_new.data_array[idxs,0,:,:] = shuf_data[:,k,:,:]
+            uvd_new.flag_array[idxs,0,:,:] = shuf_flag[:,k,:,:]
+            uvd_new.nsample_array[idxs,0,:,:] = shuf_nsamp[:,k,:,:]
         
     return uvd_new
    
