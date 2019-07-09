@@ -94,3 +94,84 @@ class test_flag(unittest.TestCase):
             nt.assert_true(np.array_equal( \
                 col_flagged_uvds[i].get_nsamples((38, 68, 'xx')), \
                                           self.d[i].get_nsamples((38, 68, 'xx'))))
+
+    def test_construct_factorizable_mask(self):
+        """
+        Test factorizable mask generator function.
+        """
+        # Test unflagging
+        unflagged_uvdlist = hs.flag.construct_factorizable_mask(
+                                            self.d, spw_ranges=[(0,1024)], 
+                                            unflag=True, inplace=False)
+        for uvd in unflagged_uvdlist:
+            unflagged_mask = uvd.get_flags((38, 68, 'xx'))
+            nt.assert_equal(np.sum(unflagged_mask), 0)
+        
+        # Ensure that greedy flagging works as expected in extreme cases
+        allflagged_uvdlist = hs.flag.construct_factorizable_mask(
+                                            self.d, spw_ranges=[(0,1024)], 
+                                            greedy_threshold=0.0001, 
+                                            first='row', inplace=False)
+        for uvd in allflagged_uvdlist:
+            flagged_mask = uvd.get_flags((38, 68, 'xx'))
+        
+        # Everything should be flagged since greedy_threshold is extremely low
+            nt.assert_equal(np.sum(flagged_mask), \
+                            np.sum(np.ones(flagged_mask.shape)))
+        
+        # Ensure that n_threshold parameter works as expected in extreme cases
+        allflagged_uvdlist2 = hs.flag.construct_factorizable_mask(
+                                            self.d, spw_ranges=[(0,1024)], 
+                                            n_threshold=35, 
+                                            first='row', inplace=False)
+        for uvd in allflagged_uvdlist2:
+            flagged_mask = uvd.get_flags((38, 68, 'xx'))
+            nt.assert_equal(np.sum(flagged_mask), \
+                            np.sum(np.ones(flagged_mask.shape)))
+        
+        # Ensure that greedy flagging is occurring within the intended spw: 
+        greedily_flagged_uvdlist = hs.flag.construct_factorizable_mask(
+                                            self.d, n_threshold=6, 
+                                            greedy_threshold=0.35, 
+                                            first='col',
+                                            spw_ranges=[(0, 300), (500, 700)], 
+                                            inplace=False)
+        
+        for i in range(len(self.d)):
+            # Check that outside the spw range, flags are all equal
+            nt.assert_true(np.array_equal( \
+                greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))[:, 300:500], \
+                                  self.d[i].get_flags((38, 68, 'xx'))[:, 300:500]))
+            nt.assert_true(np.array_equal( \
+                greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))[:, 700:], \
+                                  self.d[i].get_flags((38, 68, 'xx'))[:, 700:]))
+            
+            # Flags are actually retained
+            original_flags_ind = np.where(
+                                    self.d[i].get_flags((38, 68, 'xx')) == True)
+            new_flags = greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))
+            old_flags = self.d[i].get_flags((38, 68, 'xx'))
+            nt.assert_true(np.array_equal( \
+                new_flags[original_flags_ind], old_flags[original_flags_ind]))
+            
+            # Check that inplace objects match in important areas
+            nt.assert_true(np.array_equal( \
+                greedily_flagged_uvdlist[i].get_data((38, 68, 'xx')), \
+                                          self.d[i].get_data((38, 68, 'xx'))))
+            nt.assert_true(np.array_equal( \
+                greedily_flagged_uvdlist[i].get_nsamples((38, 68, 'xx')), \
+                                          self.d[i].get_nsamples((38, 68, 'xx'))))
+            
+            # Make sure flags are actually independent in each spw
+            masks = [new_flags[:, 0:300], new_flags[:, 500:700]]
+            for mask in masks:
+                Nfreqs = mask.shape[1]
+                Ntimes = mask.shape[0]
+                N_flagged_rows = np.sum( \
+                    1*(np.sum(mask, axis=1)/Nfreqs > 0.999999999))
+                N_flagged_cols = np.sum( \
+                    1*(np.sum(mask, axis=0)/Ntimes > 0.999999999))
+                nt.assert_true(int(np.sum( \
+                    mask[np.where(np.sum(mask, axis=1)/Nfreqs < 0.99999999)]) \
+                                   /(Ntimes-N_flagged_rows)) == N_flagged_cols)
+
