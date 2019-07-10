@@ -100,3 +100,34 @@ def trim_empty_blpairs(uvp, bl_grp, spw=0, pol='pI'):
                 new_grp.append(blp)
         new_bl_grp.append(new_grp)
     return new_bl_grp
+
+
+def stacked_array(array_list):
+    """
+    Generates a long stacked array from a list of arrays.
+    
+    Parameters
+    ----------
+    array_list : list
+        List of np.ndarray objects to be stacked.
+    
+    Returns
+    -------
+    array_total : np.ndarray
+        Array of all arrays in array_list stacked in list index order.
+    """
+    counter = 0
+    if len(array_list) == 0:
+        raise ValueError("input array list cannot be empty")
+    
+    # Looping through all the arrays and stacking them up
+    for i in range(len(array_list)):
+        array_new = np.zeros(array_list[i].shape)
+        if counter == 0:
+            array_total = array_list[i]
+        elif counter != 0:
+            array_new = array_list[i]
+            array_total = np.vstack((array_total, array_new))
+        counter += 1
+    return array_total
+
