@@ -3,7 +3,7 @@ import hera_stats as hs
 from pyuvdata import UVData
 from hera_stats.data import DATA_PATH
 from hera_pspec.data import DATA_PATH as PSPEC_DATA_PATH
-import os, sys
+import os, sys, copy
 import nose.tools as nt
 import unittest
 
@@ -94,7 +94,28 @@ class test_flag(unittest.TestCase):
             nt.assert_true(np.array_equal( \
                 col_flagged_uvds[i].get_nsamples((38, 68, 'xx')), \
                                           self.d[i].get_nsamples((38, 68, 'xx'))))
-
+        
+        # Test input checking (must be UVData object, not a list etc)
+        nt.assert_raises(TypeError, hs.flag.flag_channels, "not a uvpspec", 
+                         chans, inplace=False)
+        nt.assert_raises(TypeError, hs.flag.flag_channels, self.d, chans, 
+                         inplace=False)
+        
+        # spw_ranges must be list of tuples
+        nt.assert_raises(TypeError, hs.flag.flag_channels, self.d[0], 
+                         (200, 451), inplace=False)
+        nt.assert_raises(TypeError, hs.flag.flag_channels, self.d[0], 
+                         [200, 451], inplace=False)
+        nt.assert_raises(TypeError, hs.flag.flag_channels, self.d[0], 
+                         [[200, 451],], inplace=False)
+        
+        # Test inplace
+        uvd_inplace = copy.deepcopy(self.d[0])
+        uvd_inplace_new = hs.flag.flag_channels(uvd_inplace, chans, inplace=True)
+        np.testing.assert_almost_equal(uvd_inplace.flag_array, 
+                                       uvd_inplace_new.flag_array)
+        
+        
     def test_construct_factorizable_mask(self):
         """
         Test factorizable mask generator function.
@@ -107,15 +128,55 @@ class test_flag(unittest.TestCase):
             unflagged_mask = uvd.get_flags((38, 68, 'xx'))
             nt.assert_equal(np.sum(unflagged_mask), 0)
         
+        # Test unflagging (inplace)
+        uvd_copy = copy.deepcopy(self.d[0])
+        unflagged_inplace = hs.flag.construct_factorizable_mask(
+                                            [uvd_copy,], spw_ranges=[(0,1024)], 
+                                            unflag=True, inplace=True)
+        nt.assert_equal(np.sum(uvd_copy.get_flags((38, 68, 'xx'))), 0.)
+        
+        # Test input checking
+        nt.assert_raises(ValueError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[(0,1024)], unflag=True, inplace=False, 
+                         first='column') # first = 'row' or 'column'
+        
+        nt.assert_raises(ValueError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[(0,1024)], unflag=True, inplace=False, 
+                         greedy_threshold=1.2) # greedy_threshold invalid
+        
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[(0,1024)], unflag=True, inplace=False, 
+                         n_threshold=np.arange(3)) # n_threshold invalid
+        
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[(0,1024)], unflag=True, inplace=False, 
+                         greedy_threshold=(0.2, 0.3)) # greedy_threshold invalid
+        
+        # Must pass list of UVData objects only
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, 
+                         self.d[0], spw_ranges=[(0,1024)], unflag=True, 
+                         inplace=False)
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, 
+                         [self.d[0],2,3], spw_ranges=[(0,1024)], unflag=True, 
+                         inplace=False)
+        
+        # spw_ranges must be list of tuples
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=(0,1024), unflag=True, inplace=False)
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[0,1024], unflag=True, inplace=False)
+        nt.assert_raises(TypeError, hs.flag.construct_factorizable_mask, self.d, 
+                         spw_ranges=[[0,1024],], unflag=True, inplace=False)
+        
         # Ensure that greedy flagging works as expected in extreme cases
         allflagged_uvdlist = hs.flag.construct_factorizable_mask(
                                             self.d, spw_ranges=[(0,1024)], 
                                             greedy_threshold=0.0001, 
                                             first='row', inplace=False)
-        for uvd in allflagged_uvdlist:
-            flagged_mask = uvd.get_flags((38, 68, 'xx'))
         
         # Everything should be flagged since greedy_threshold is extremely low
+        for uvd in allflagged_uvdlist:
+            flagged_mask = uvd.get_flags((38, 68, 'xx'))
             nt.assert_equal(np.sum(flagged_mask), \
                             np.sum(np.ones(flagged_mask.shape)))
         
@@ -129,8 +190,19 @@ class test_flag(unittest.TestCase):
             nt.assert_equal(np.sum(flagged_mask), \
                             np.sum(np.ones(flagged_mask.shape)))
         
+        # Check that retain_flags doesn't error (TODO: explicitly check that 
+        # flags retained)
+        allflagged_uvdlist3 = hs.flag.construct_factorizable_mask(
+                                            self.d, spw_ranges=[(0,1024)], 
+                                            n_threshold=35, retain_flags=True,
+                                            first='row', inplace=False)
+        for uvd in allflagged_uvdlist3:
+            flagged_mask = uvd.get_flags((38, 68, 'xx'))
+            nt.assert_equal(np.sum(flagged_mask), \
+                            np.sum(np.ones(flagged_mask.shape)))
+        
         # Ensure that greedy flagging is occurring within the intended spw: 
-        greedily_flagged_uvdlist = hs.flag.construct_factorizable_mask(
+        greedyflag_uvdlist = hs.flag.construct_factorizable_mask(
                                             self.d, n_threshold=6, 
                                             greedy_threshold=0.35, 
                                             first='col',
@@ -139,27 +211,27 @@ class test_flag(unittest.TestCase):
         
         for i in range(len(self.d)):
             # Check that outside the spw range, flags are all equal
-            nt.assert_true(np.array_equal( \
-                greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))[:, 300:500], \
-                                  self.d[i].get_flags((38, 68, 'xx'))[:, 300:500]))
-            nt.assert_true(np.array_equal( \
-                greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))[:, 700:], \
-                                  self.d[i].get_flags((38, 68, 'xx'))[:, 700:]))
+            nt.assert_true(np.array_equal(
+                    greedyflag_uvdlist[i].get_flags((38, 68, 'xx'))[:, 300:500],
+                    self.d[i].get_flags((38, 68, 'xx'))[:, 300:500]) )
+            nt.assert_true(np.array_equal(
+                    greedyflag_uvdlist[i].get_flags((38, 68, 'xx'))[:, 700:],
+                    self.d[i].get_flags((38, 68, 'xx'))[:, 700:]) )
             
             # Flags are actually retained
             original_flags_ind = np.where(
                                     self.d[i].get_flags((38, 68, 'xx')) == True)
-            new_flags = greedily_flagged_uvdlist[i].get_flags((38, 68, 'xx'))
+            new_flags = greedyflag_uvdlist[i].get_flags((38, 68, 'xx'))
             old_flags = self.d[i].get_flags((38, 68, 'xx'))
             nt.assert_true(np.array_equal( \
                 new_flags[original_flags_ind], old_flags[original_flags_ind]))
             
             # Check that inplace objects match in important areas
             nt.assert_true(np.array_equal( \
-                greedily_flagged_uvdlist[i].get_data((38, 68, 'xx')), \
+                greedyflag_uvdlist[i].get_data((38, 68, 'xx')), \
                                           self.d[i].get_data((38, 68, 'xx'))))
             nt.assert_true(np.array_equal( \
-                greedily_flagged_uvdlist[i].get_nsamples((38, 68, 'xx')), \
+                greedyflag_uvdlist[i].get_nsamples((38, 68, 'xx')), \
                                           self.d[i].get_nsamples((38, 68, 'xx'))))
             
             # Make sure flags are actually independent in each spw

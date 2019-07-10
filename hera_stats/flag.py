@@ -183,8 +183,19 @@ def construct_factorizable_mask(uvd_list, spw_ranges, first='col',
     uvdlist_new : list
         if inplace=False, a new list of UVData objects with updated flags 
     """
+    # Check validity of input args
     if first not in ['col', 'row']:
         raise ValueError("'first' must be either 'row' or 'col'.")
+    if not isinstance(uvd_list, list):
+        raise TypeError("uvd_list must be a list of UVData objects")
+    
+    # Check validity of thresholds
+    allowed_types = (float, np.float, int, np.integer)
+    if not isinstance(greedy_threshold, allowed_types) \
+      or not isinstance(n_threshold, allowed_types):
+        raise TypeError("greedy_threshold and n_threshold must be float or int")
+    if greedy_threshold >= 1. or greedy_threshold <= 0.:
+        raise ValueError("greedy_threshold must be in interval [0, 1]")
     
     # List of output objects
     uvdlist_new = []
@@ -232,14 +243,6 @@ def construct_factorizable_mask(uvd_list, spw_ranges, first='col',
                     narrower_flags_window = flags[:, spw[0]:spw[1]]
                     narrower_nsamples_window = nsamples[:, spw[0]:spw[1]]
                     flags_output = np.zeros(narrower_flags_window.shape)
-                    
-                    if not (isinstance(greedy_threshold, float) \
-                    or isinstance(n_threshold, int)):
-                        raise TypeError("greedy_threshold must be a float, and "
-                                        "n_threshold must be an int")
-                    if greedy_threshold >= 1. or greedy_threshold <= 0.:
-                        raise ValueError("greedy_threshold must be in interval "
-                                         "[0, 1]")
                     
                     # If retaining flags, an extra condition is added to the 
                     # threshold filter
