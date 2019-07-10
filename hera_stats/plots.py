@@ -368,16 +368,18 @@ def plot_anderson(jkset, ax=None):
     ax.grid(True)
 
 
-def long_waterfall(uvd_list, bl, pol, title, cmap='gray', starting_lst=[], 
-                   mode='nsamples'):
+def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[], 
+                   mode='nsamples', file_type='uvh5'):
     """    
     Generates a waterfall plot of flags or nsamples with axis sums from an
-    input array
+    input array.
 
     Parameters
     ----------
-    uvd_list : list of UVData
-        list of UVData objects to be stacked and displayed
+    uvd_list : list of UVData objects or list of str
+        List of UVData objects to be stacked and displayed. if a list of 
+        strings is specified, each UVData object will be loaded one at a time 
+        (reduces peak memory consumption).
     
     bl : int or tuple
         Baseline integer or antenna pair tuple of the baseline to plot.
@@ -385,11 +387,11 @@ def long_waterfall(uvd_list, bl, pol, title, cmap='gray', starting_lst=[],
     pol : str or int
         Polarization string or integer.
     
-    title : str
-        title of the plot
+    title : str, optional
+        Title of the plot. Default: none.
     
     cmap : str, optional
-        cmap parameter for the waterfall plot (default is 'gray')
+        Colormap parameter for the waterfall plot. Default: 'gray'.
         
     starting_lst : list, optional
         list of starting lst to display in the plot
@@ -397,6 +399,10 @@ def long_waterfall(uvd_list, bl, pol, title, cmap='gray', starting_lst=[],
     mode : str, optional
         Which array to plot from the UVData objects. Options: 'data', 'flags', 
         'nsamples'. Default: 'nsamples'. 
+    
+    file_type : str, optional
+        If `uvd_list` is passed as a list of strings, specifies the file type 
+        of the data files to assume when loading them. Default: 'uvh5'.
     
     Returns
     -------
@@ -412,20 +418,34 @@ def long_waterfall(uvd_list, bl, pol, title, cmap='gray', starting_lst=[],
     data : numpy.ndarray
         A copy of the stacked_array output that is being displayed
     """
-    # Construct key to access data
-    if isinstance(bl, (int, np.int)):
-        bl = uvd_list.baseline_to_antnums(bl)
-    key = (bl[0], bl[1], pol)
+    arr_list = []
+    for _uvd in uvd_list:
+        
+        # Try to load UVData from file
+        if isinstance(_uvd, str):
+            uvd = UVData()
+            uvd.read(_uvd, file_type=file_type)
+        elif isinstance(_uvd, UVData):
+            # Already loaded into UVData object
+            uvd = _uvd
+        else:
+            raise TypeError("uvd_list must contain either filename strings or "
+                            "UVData objects")
     
-    # Get requested data
-    if mode == 'data':
-        arr_list = [uvd.get_data(key) for uvd in uvd_list]
-    elif mode == 'flags':
-        arr_list = [uvd.get_flags(key) for uvd in uvd_list]
-    elif mode == 'nsamples':
-        arr_list = [uvd.get_nsamples(key) for uvd in uvd_list]
-    else:
-        raise ValueError("mode '%s' not recognized." % mode)
+        # Construct key to access data
+        if isinstance(bl, (int, np.int)):
+            bl = uvd.baseline_to_antnums(bl)
+        key = (bl[0], bl[1], pol)
+    
+        # Get requested data
+        if mode == 'data':
+            arr_list.append(uvd.get_data(key))
+        elif mode == 'flags':
+            arr_list.append(uvd.get_flags(key))
+        elif mode == 'nsamples':
+            arr_list.append(uvd.get_nsamples(key))
+        else:
+            raise ValueError("mode '%s' not recognized." % mode)
     
     # Stack arrays into one big array
     data = utils.stacked_array(arr_list)
