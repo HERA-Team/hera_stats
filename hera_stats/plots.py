@@ -1,5 +1,6 @@
 import numpy as np
 from . import stats, utils
+from pyuvdata import UVData
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
