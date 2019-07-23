@@ -68,7 +68,7 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
     
     if mode == 'time':
         # Get unique times from UVPSpec object
-        avail_times = np.unique(uvp.time_1_array)
+        avail_times = np.unique(uvp.time_avg_array)
         if avail_times.size <= min_samples:
             raise ValueError("min_samples is larger than or equal to the number "
                              "of available samples.")
@@ -92,9 +92,10 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
             # Select subset of samples (good for performance)
             uvp_t.select(times=avail_times[:t], blpairs=blps)
 
-            # Average over blpair and time
+            # Average over blpair and time (use time_avg_array as the time key, 
+            # as this is what UVPSPec.select() uses)
             _avg = uvp_t.average_spectra([blps,], time_avg=True, inplace=False)
-            n_samples.append( np.unique(uvp_t.time_1_array).size )
+            n_samples.append( np.unique(uvp_t.time_avg_array).size )
             
             # Unpack data into array (spw=0 since we only selected one spw)
             ps = _avg.get_data((0, _avg.blpair_array[0], polpair)).flatten()
