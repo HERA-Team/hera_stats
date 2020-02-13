@@ -369,8 +369,9 @@ def plot_anderson(jkset, ax=None):
     ax.grid(True)
 
 
-def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[], 
-                   mode='nsamples', file_type='uvh5'):
+def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis', 
+                   starting_lst=[], mode='nsamples', file_type='uvh5', 
+                   transform=None):
     """    
     Generates a waterfall plot of flags or nsamples with axis sums from an
     input array.
@@ -378,7 +379,7 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     Parameters
     ----------
     uvd_list : list of UVData objects or list of str
-        List of UVData objects to be stacked and displayed. if a list of 
+        List of UVData objects to be stacked and displayed. If a list of 
         strings is specified, each UVData object will be loaded one at a time 
         (reduces peak memory consumption).
     
@@ -392,7 +393,7 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
         Title of the plot. Default: none.
     
     cmap : str, optional
-        Colormap parameter for the waterfall plot. Default: 'gray'.
+        Colormap parameter for the waterfall plot. Default: 'viridis'.
         
     starting_lst : list, optional
         list of starting lst to display in the plot
@@ -404,6 +405,10 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     file_type : str, optional
         If `uvd_list` is passed as a list of strings, specifies the file type 
         of the data files to assume when loading them. Default: 'uvh5'.
+    
+    transform : function, optional
+        Vectorized function to apply to array before plotting, e.g. np.abs. 
+        Default: None.
     
     Returns
     -------
@@ -450,6 +455,10 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     
     # Stack arrays into one big array
     data = utils.stacked_array(arr_list)
+    
+    # Apply transform
+    if transform is not None:
+        data = transform(data)
     
     # Set up the figure and grid
     fig = plt.figure()
