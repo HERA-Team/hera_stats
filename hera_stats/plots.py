@@ -369,13 +369,13 @@ def plot_anderson(jkset, ax=None):
     ax.grid(True)
 
 
-def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis', 
-                   starting_lst=[], mode='nsamples', file_type='uvh5', 
-                   transform=None):
+def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[], 
+                   mode='nsamples', operator='abs', file_type='uvh5', 
+                   figsize=(20, 80)):
     """    
     Generates a waterfall plot of flags or nsamples with axis sums from an
     input array.
-
+    
     Parameters
     ----------
     uvd_list : list of UVData objects or list of str
@@ -393,7 +393,7 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
         Title of the plot. Default: none.
     
     cmap : str, optional
-        Colormap parameter for the waterfall plot. Default: 'viridis'.
+        Colormap parameter for the waterfall plot. Default: 'gray'.
         
     starting_lst : list, optional
         list of starting lst to display in the plot
@@ -402,13 +402,16 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
         Which array to plot from the UVData objects. Options: 'data', 'flags', 
         'nsamples'. Default: 'nsamples'. 
     
+    operator : str, optional
+        If mode='data', the operator to apply when plotting the data. Can be 
+        'real', 'imag', 'abs', 'phase'. Default: 'abs'.
+    
     file_type : str, optional
         If `uvd_list` is passed as a list of strings, specifies the file type 
         of the data files to assume when loading them. Default: 'uvh5'.
     
-    transform : function, optional
-        Vectorized function to apply to array before plotting, e.g. np.abs. 
-        Default: None.
+    figsize : tuple, optional
+        The size of the figure, in inches. Default: (20, 80).
     
     Returns
     -------
@@ -424,13 +427,33 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
     data : numpy.ndarray
         A copy of the stacked_array output that is being displayed
     """
+    # Check data operator is valid (if specified)
+    if mode == 'data':
+        if operator == 'abs':
+            op = np.abs
+        elif operator == 'real':
+            op = np.real
+        elif operator == 'imag':
+            op = np.imag
+        elif operator == 'phase':
+            op = np.angle
+        else:
+            raise ValueError("'%s' is not a valid value for the operator kwarg. "
+                             "Valid options: ['real', 'imag', 'abs', 'phase']" \
+                             % operator)
+    
     arr_list = []
     for _uvd in uvd_list:
         
         # Try to load UVData from file
         if isinstance(_uvd, str):
             uvd = UVData()
-            uvd.read(_uvd, file_type=file_type)
+            if file_type == "uvh5":
+                # Do partial load
+                uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
+            else:
+                # Load the whole file!
+                uvd.read(_uvd, file_type=file_type)
         elif isinstance(_uvd, UVData):
             # Already loaded into UVData object
             uvd = _uvd
@@ -445,7 +468,7 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
     
         # Get requested data
         if mode == 'data':
-            arr_list.append(uvd.get_data(key))
+            arr_list.append(op(uvd.get_data(key)))
         elif mode == 'flags':
             arr_list.append(uvd.get_flags(key))
         elif mode == 'nsamples':
@@ -456,13 +479,8 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
     # Stack arrays into one big array
     data = utils.stacked_array(arr_list)
     
-    # Apply transform
-    if transform is not None:
-        data = transform(data)
-    
     # Set up the figure and grid
     fig = plt.figure()
-    fig.suptitle(title, fontsize=30, horizontalalignment='center')
     grid = gridspec.GridSpec(ncols=10, nrows=15)
     
     # Create main components of figure
@@ -471,7 +489,8 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
     time_histogram = fig.add_subplot(grid[0:14, 8:10], sharey=main_waterfall)
     
     # Set sizes
-    fig.set_size_inches(20, 80)
+    fig.set_size_inches(figsize)
+    fig.suptitle(title, fontsize=30, y=1.005) #, horizontalalignment='center')
     grid.tight_layout(fig)
     counter = data.shape[0] // 60
     
@@ -522,4 +541,4 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='viridis',
     
     # Returning the axes
     return main_waterfall, freq_histogram, time_histogram, data
-
+    

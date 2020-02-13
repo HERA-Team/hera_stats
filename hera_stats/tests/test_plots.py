@@ -142,7 +142,8 @@ class Test_Plots(unittest.TestCase):
         # Check to make sure transform kwarg works (i.e. no errors)
         main_waterfall, freq_histogram, time_histogram, data \
             = hs.plots.long_waterfall(self.d, bl=(38, 68), pol='xx', 
-                                      title='Flags Waterfall', transform=np.abs)
+                                      title='Flags Waterfall', mode='data', 
+                                      operator='phase')
 
     
 if __name__ == "__main__":
