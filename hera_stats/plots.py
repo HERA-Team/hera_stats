@@ -488,13 +488,13 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     grid = gridspec.GridSpec(ncols=10, nrows=15)
     
     # Create main components of figure
-    main_waterfall = fig.add_subplot(grid[0:14, 0:8])
-    freq_histogram = fig.add_subplot(grid[14:15, 0:8], sharex=main_waterfall)
+    main_waterfall = fig.add_subplot(grid[0:14, 1:8])
+    freq_histogram = fig.add_subplot(grid[14:15, 1:8], sharex=main_waterfall)
     time_histogram = fig.add_subplot(grid[0:14, 8:10], sharey=main_waterfall)
     
     # Set sizes
     fig.set_size_inches(figsize)
-    fig.suptitle(title, fontsize=30, y=1.005) #, horizontalalignment='center')
+    fig.suptitle(title, fontsize=30, y=0.975) #, horizontalalignment='center')
     grid.tight_layout(fig)
     counter = data.shape[0] // 60
     
