@@ -451,7 +451,9 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
             if file_type == "uvh5":
                 # Do partial load
                 if isinstance(bl, (int, np.int)):
-                    bl = uvd.baseline_to_antnums(bl)
+                    raise TypeError("Baseline 'bl' must be specified as an "
+                                    "antenna pair to use the partial load "
+                                    "feature.")
                 uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
             else:
                 # Load the whole file!
