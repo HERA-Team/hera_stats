@@ -15,8 +15,8 @@ dependencies:
   - scipy
   - six
   - jupyter
-  - pyuvdata
   - pip:
+    - git+https://github.com/RadioAstronomySoftwareGroup/pyuvdata
     - git+https://github.com/HERA-Team/linsolve
     - git+https://github.com/HERA-Team/uvtools
     - git+https://github.com/HERA-Team/hera_cal
