@@ -29,7 +29,7 @@ def plt_layout(req):
 def bin_wrap(angles, n):
 
     angles = np.array(angles)
-    degs = np.linspace(-360, 360, 720/10+1)
+    degs = np.linspace(-360, 360, 720//10+1)
     ha = np.hstack([angles-360, angles])
 
     isindeg = [bool(sum((ha > degs[i]) * (ha < degs[i+1]))) for i in range(len(degs)-1)]
