@@ -1,11 +1,13 @@
 # Extra utilities for hera_stats
-import os
-import copy
 import numpy as np
+import os, copy
 
 def plt_layout(req):
-    """Helper function for figuring out best layout of histogram table"""
-    # req is the requested number of plots. All numbers below it are potential divisors
+    """
+    Helper function for figuring out best layout of histogram table
+    """
+    # req is the requested number of plots. All numbers below it are 
+    # potential divisors
     divisors = np.arange(1,req)
 
     # How many empty plots would be left
@@ -27,7 +29,7 @@ def plt_layout(req):
 def bin_wrap(angles, n):
 
     angles = np.array(angles)
-    degs = np.linspace(-360, 360, 720/10+1)
+    degs = np.linspace(-360, 360, 720//10+1)
     ha = np.hstack([angles-360, angles])
 
     isindeg = [bool(sum((ha > degs[i]) * (ha < degs[i+1]))) for i in range(len(degs)-1)]
@@ -60,6 +62,41 @@ def is_in_wrap(low, hi, angle):
         return True
 
     return False
+
+
+def trim_empty_bls(uvd, bl_grp):
+    """
+    Remove any baselines with zero data from a list of baseline groups.
+    
+    Parameters
+    ----------
+    uvd : UVData
+        Object containing data.
+    
+    bl_grp : list of list of baseline tuples or ints
+        List of groups of baselines.
+    
+    Returns
+    -------
+    bl_grp_trimmed : list of baseline tuples or ints
+        Copy of bl_grp with all zeroed bls removed.
+    """
+    # Try to convert to list of lists if it isn't already
+    if not isinstance(bl_grp[0], list):
+        bl_grp = [bl_grp,]
+    bl_grp_trimmed = []
+    
+    # Loop over groups
+    for grp in bl_grp:
+        
+        # Loop over bls in group
+        new_grp = []
+        for bl in grp:
+            flags = uvd.get_flags(bl)
+            if not np.all(flags == True):
+                new_grp.append(bl)
+        bl_grp_trimmed.append(new_grp)
+    return bl_grp_trimmed
 
 
 def trim_empty_blpairs(uvp, bl_grp, spw=0, pol='pI'):
@@ -130,4 +167,5 @@ def stacked_array(array_list):
             array_total = np.vstack((array_total, array_new))
         counter += 1
     return array_total
+
 

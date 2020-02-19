@@ -138,6 +138,12 @@ class Test_Plots(unittest.TestCase):
         # Make sure the freq graph has the appropriate line element
         freq_elems = [(matplotlib.lines.Line2D, 1)]
         nt.assert_true(axes_contains(freq_histogram, freq_elems))
+        
+        # Check to make sure transform kwarg works (i.e. no errors)
+        main_waterfall, freq_histogram, time_histogram, data \
+            = hs.plots.long_waterfall(self.d, bl=(38, 68), pol='xx', 
+                                      title='Flags Waterfall', mode='data', 
+                                      operator='phase')
 
     
 if __name__ == "__main__":

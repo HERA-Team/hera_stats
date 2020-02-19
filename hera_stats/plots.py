@@ -370,15 +370,16 @@ def plot_anderson(jkset, ax=None):
 
 
 def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[], 
-                   mode='nsamples', file_type='uvh5'):
+                   mode='nsamples', operator='abs', file_type='uvh5', 
+                   figsize=(20, 80)):
     """    
     Generates a waterfall plot of flags or nsamples with axis sums from an
     input array.
-
+    
     Parameters
     ----------
     uvd_list : list of UVData objects or list of str
-        List of UVData objects to be stacked and displayed. if a list of 
+        List of UVData objects to be stacked and displayed. If a list of 
         strings is specified, each UVData object will be loaded one at a time 
         (reduces peak memory consumption).
     
@@ -401,9 +402,16 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
         Which array to plot from the UVData objects. Options: 'data', 'flags', 
         'nsamples'. Default: 'nsamples'. 
     
+    operator : str, optional
+        If mode='data', the operator to apply when plotting the data. Can be 
+        'real', 'imag', 'abs', 'phase'. Default: 'abs'.
+    
     file_type : str, optional
         If `uvd_list` is passed as a list of strings, specifies the file type 
         of the data files to assume when loading them. Default: 'uvh5'.
+    
+    figsize : tuple, optional
+        The size of the figure, in inches. Default: (20, 80).
     
     Returns
     -------
@@ -419,13 +427,37 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     data : numpy.ndarray
         A copy of the stacked_array output that is being displayed
     """
+    # Check data operator is valid (if specified)
+    if mode == 'data':
+        if operator == 'abs':
+            op = np.abs
+        elif operator == 'real':
+            op = np.real
+        elif operator == 'imag':
+            op = np.imag
+        elif operator == 'phase':
+            op = np.angle
+        else:
+            raise ValueError("'%s' is not a valid value for the operator kwarg. "
+                             "Valid options: ['real', 'imag', 'abs', 'phase']" \
+                             % operator)
+    
     arr_list = []
     for _uvd in uvd_list:
         
         # Try to load UVData from file
         if isinstance(_uvd, str):
             uvd = UVData()
-            uvd.read(_uvd, file_type=file_type)
+            if file_type == "uvh5":
+                # Do partial load
+                if isinstance(bl, (int, np.int)):
+                    raise TypeError("Baseline 'bl' must be specified as an "
+                                    "antenna pair to use the partial load "
+                                    "feature.")
+                uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
+            else:
+                # Load the whole file!
+                uvd.read(_uvd, file_type=file_type)
         elif isinstance(_uvd, UVData):
             # Already loaded into UVData object
             uvd = _uvd
@@ -440,7 +472,7 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     
         # Get requested data
         if mode == 'data':
-            arr_list.append(uvd.get_data(key))
+            arr_list.append(op(uvd.get_data(key)))
         elif mode == 'flags':
             arr_list.append(uvd.get_flags(key))
         elif mode == 'nsamples':
@@ -453,16 +485,16 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     
     # Set up the figure and grid
     fig = plt.figure()
-    fig.suptitle(title, fontsize=30, horizontalalignment='center')
     grid = gridspec.GridSpec(ncols=10, nrows=15)
     
     # Create main components of figure
-    main_waterfall = fig.add_subplot(grid[0:14, 0:8])
-    freq_histogram = fig.add_subplot(grid[14:15, 0:8], sharex=main_waterfall)
+    main_waterfall = fig.add_subplot(grid[0:14, 1:8])
+    freq_histogram = fig.add_subplot(grid[14:15, 1:8], sharex=main_waterfall)
     time_histogram = fig.add_subplot(grid[0:14, 8:10], sharey=main_waterfall)
     
     # Set sizes
-    fig.set_size_inches(20, 80)
+    fig.set_size_inches(figsize)
+    fig.suptitle(title, fontsize=30, y=0.975) #, horizontalalignment='center')
     grid.tight_layout(fig)
     counter = data.shape[0] // 60
     
@@ -513,4 +545,4 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     
     # Returning the axes
     return main_waterfall, freq_histogram, time_histogram, data
-
+    

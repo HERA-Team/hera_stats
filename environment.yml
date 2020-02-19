@@ -1,4 +1,4 @@
-name: hera_pspec
+name: hera_stats
 channels:
   - conda-forge
   - defaults
@@ -13,14 +13,13 @@ dependencies:
   - pyyaml
   - scikit-learn
   - scipy
-  - six
   - jupyter
+  - six
+  - pyuvdata
   - pip:
-    - git+https://github.com/RadioAstronomySoftwareGroup/pyuvdata
     - git+https://github.com/HERA-Team/linsolve
     - git+https://github.com/HERA-Team/uvtools
     - git+https://github.com/HERA-Team/hera_cal
     - git+https://github.com/HERA-Team/hera_pspec
     - pyephem
     - multiprocess
-
