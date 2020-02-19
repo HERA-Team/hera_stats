@@ -108,6 +108,7 @@ class test_average():
         if os.path.exists("./out.h5"):
             os.remove("./out.h5")
         blps_toffset = [((38, 68), (37, 38)), ((38, 68), (52, 53))]
+        
         fname = "./out.h5"
         ds = hp.pspecdata.pspec_run([uvd1, uvd2],
                                          fname,
@@ -117,6 +118,7 @@ class test_average():
                                          rephase_to_dset=0,
                                          broadcast_dset_flags=True, 
                                          time_thresh=0.3)
+        
         psc = hp.PSpecContainer(fname, mode='r')
         uvp_toffset = psc.get_pspec(psc.groups()[0])[0]
         
@@ -127,6 +129,22 @@ class test_average():
                                 mode='time', min_samples=1, shuffle=False, 
                                 time_avg=True, verbose=False)
         
+    def test_redundant_diff(self):
+        
+        # Get list of unique bls
+        bls = self.uvd.get_antpairs()
+        print("num bls:", len(bls))
+        pol = self.uvd.polarization_array[0]
+        
+        # Try to run function
+        _bls, diffs = hs.average.redundant_diff(self.uvd, bls, pol)
+        nt.assert_equal(len(_bls), len(diffs))
+        
+        # Re-run, no returning the mean
+        _bls, diffs, mean = hs.average.redundant_diff(self.uvd, bls, pol, 
+                                                      return_mean=True)
+        nt.assert_equal(mean.shape, diffs[0].shape)
+    
 if __name__ == "__main__":
     unittest.main()
 
