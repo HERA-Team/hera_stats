@@ -1,8 +1,7 @@
 language: python
 python:
   # We don't actually use the Travis Python, but this keeps it organized.
-  - "2.7"
-  - "3.6"
+  - "3.7"
 
 # Cache pip-installed dependencies
 cache:
@@ -11,17 +10,17 @@ cache:
 services:
   - xvfb
 
+env:
+  global:
+    - COVERALLS_PARALLEL=true
+
 install:
   # ensure that we have the full tag information available for version.py
   - git fetch --tags
   - sudo apt-get update
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
-    else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    fi
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - hash -r
@@ -31,31 +30,15 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy nose pip matplotlib coverage h5py
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls jupyter
   - source activate test-environment
-  - conda install -c conda-forge healpy aipy
-  - pip install pyyaml
-  - pip install multiprocess
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      pip install scikit-learn==0.20.3;
-    else
-      pip install scikit-learn;
-    fi
-  - pip install coveralls
-  - pip install --upgrade jupyter
-  - pip install git+https://github.com/HERA-Team/pyuvdata.git
-  - pip install git+https://github.com/HERA-Team/omnical.git
-  - pip install git+https://github.com/HERA-Team/linsolve.git
-  - pip install git+https://github.com/HERA-Team/hera_qm.git
-  - pip install git+https://github.com/HERA-Team/uvtools.git
-  - pip install git+https://github.com/HERA-Team/hera_cal.git
-  - pip install git+https://github.com/HERA-Team/hera_pspec.git
-  - python setup.py install
+  - conda env update -n test-environment -f environment.yml
+  - pip install -e .  # force it to have a GIT_INFO file in the repo directory
 
 before_script:
   - "export MPLBACKEND=agg"
 
-script: nosetests hera_stats --with-coverage --cover-package=hera_stats
+script: nosetests -P hera_stats --with-coverage --cover-package=hera_stats --verbose
 
 after_success:
   - coveralls

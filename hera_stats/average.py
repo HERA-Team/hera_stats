@@ -1,5 +1,6 @@
 
 import numpy as np
+from .utils import trim_empty_bls
 
 def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1, 
                           shuffle=False, time_avg=True, verbose=False):
@@ -68,7 +69,7 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
     
     if mode == 'time':
         # Get unique times from UVPSpec object
-        avail_times = np.unique(uvp.time_1_array)
+        avail_times = np.unique(uvp.time_avg_array)
         if avail_times.size <= min_samples:
             raise ValueError("min_samples is larger than or equal to the number "
                              "of available samples.")
@@ -92,9 +93,10 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
             # Select subset of samples (good for performance)
             uvp_t.select(times=avail_times[:t], blpairs=blps)
 
-            # Average over blpair and time
+            # Average over blpair and time (use time_avg_array as the time key, 
+            # as this is what UVPSPec.select() uses)
             _avg = uvp_t.average_spectra([blps,], time_avg=True, inplace=False)
-            n_samples.append( np.unique(uvp_t.time_1_array).size )
+            n_samples.append( np.unique(uvp_t.time_avg_array).size )
             
             # Unpack data into array (spw=0 since we only selected one spw)
             ps = _avg.get_data((0, _avg.blpair_array[0], polpair)).flatten()
@@ -142,4 +144,68 @@ def average_spectra_cumul(uvp, blps, spw, polpair, mode='time', min_samples=1,
     avg_spectra = np.array(avg_spectra)
     n_samples = np.array(n_samples)
     return avg_spectra, dly, n_samples
+
+
+def redundant_diff(uvd, bls, pol, return_mean=False):
+    """
+    Calculate the difference between all baselines in a redundant group and 
+    the mean of the redundant group (as a fn. of frequency and time).
     
+    Empty (fully flagged) baselines are excluded from the average.
+    
+    N.B. The averaging does not currently take into account data weights or 
+    number of samples.
+    
+    Parameters
+    ----------
+    uvd : UVData
+        UVData object containing the data that will be averaged and differenced.
+    
+    bls : list of tuple or int
+        List of baseline tuples or integers to be treated as a group. The mean 
+        will be calculated over all 
+    
+    pol : str
+        Which polarization to extract from the UVData file.
+    
+    return_mean : bool, optional
+        If True, return the mean over the redundant group too. Default: False
+    
+    Returns
+    -------
+    bls : list of baseline tuple or int
+        List of baselines that were kept in the average.
+         
+    diffs : list of array_like
+        List of arrays of differences between each baseline and the group mean.
+    
+    mean : array_like, optional
+        Mean over data from all non-flagged baselines, as a function of freq. 
+        and time. Only retuend if `return_mean` is True.
+    """
+    # Check bls
+    assert isinstance(bls, list), "bls must be a list of baseline ints/tuples"
+    
+    # Clean out empty baselines from list
+    trimmed_bls = trim_empty_bls(uvd, bls)[0] # returns list of lists (unpack)
+    
+    # Calculate mean
+    grp_mean = 0
+    for bl in trimmed_bls:
+        if isinstance(bl, (int, np.int)):
+            bl = uvd.baseline_to_antnums(bl)
+        grp_mean += uvd.get_data(bl, pol)
+    grp_mean /= float(len(trimmed_bls))
+    
+    # Calculate differences
+    diffs = []
+    for bl in trimmed_bls:
+        if isinstance(bl, (int, np.int)):
+            bl = uvd.baseline_to_antnums(bl)
+        diff = uvd.get_data(bl, pol) - grp_mean
+        diffs.append(diff)
+    
+    if return_mean:
+        return bls, diffs, grp_mean
+    return bls, diffs
+
