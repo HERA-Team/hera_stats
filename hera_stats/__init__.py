@@ -1,5 +1,5 @@
 # init for hera_stats
-from . import automate, average, flag, noise, plotting, split, \
+from . import automate, average, flag, noise, plotting, shuffle, split, \
               stats, testing, version
 from . import jackknives, plots # Deprecating these
 from .jkset import JKSet
