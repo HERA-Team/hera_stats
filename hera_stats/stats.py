@@ -112,8 +112,6 @@ def weighted_average(jkset, axis=0, error_field='bs_std'):
     integrations = np.average(jk.integrations, axis=axis)
     times = np.average(jk.times, axis=axis)
     
-    print("av shape:", av.shape, times.shape, jk.times)
-    
     # If the spectra were averaged down to a single spectrum, of shape (Ndlys,), 
     # expand to (1, Ndlys).
     """

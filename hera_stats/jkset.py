@@ -216,18 +216,22 @@ class JKSet(object):
             Axis along which to add. Default: 1.
 
         inplace: boolean, optional
-            If true, keeps stacked data in this object. If false, returns new object. Default: False.
+            If true, keeps stacked data in this object. If false, returns new 
+            object. Default: False.
 
         Returns
         -------
         new_jkset: JKSet
-            If inplace == False, returns a jkset with spectra of both this class and jkset2
+            If inplace == False, returns a jkset with spectra of both this 
+            class and jkset2
         """
         if self.ndim != 1:
             # Test shape to see if stackable
-            assert axis < self.ndim,"axis outside of range (axis <= %i)." % (self.ndim - 1)
+            assert axis < self.ndim, \
+                "axis outside of range (axis <= %i)." % (self.ndim - 1)
             otheraxes = np.arange(self.ndim) != axis
-            assert all([self.shape[a] == jkset2.shape[a] for a in otheraxes]), "Axes other than the one specified must match."
+            assert all([self.shape[a] == jkset2.shape[a] for a in otheraxes]), \
+                "Axes other than the one specified must match."
 
         # Vstack or hstack uvp lists
         if axis == 1:
@@ -248,8 +252,9 @@ class JKSet(object):
         Parameters
         ----------
         spectra: 3d ndarray
-            Spectra to set. First two dimensions must match the shape of this object, and
-            third dimension must match the number of delays for this class.
+            Spectra to set. First two dimensions must match the shape of this 
+            object, and third dimension must match the number of delays for 
+            this class.
 
         errs: 3d ndarray
             Errors to set. Same restrictions as above.
@@ -259,26 +264,34 @@ class JKSet(object):
             load errors. Default: "bs_std" (which is set by
             hera_pspec.grouping.bootsrap_resampled_error).
         """
-        # Check is spectra and errors have same first 2 dimensions as class
+        # Check if spectra and errors have same first 2 dimensions as class
         msg = "First two axes of {} {} and {} {} must match."
-        assert spectra.shape[:self.ndim] == self.shape, msg.format("spectra", spectra.shape, "this JKSet", self.shape)
-        assert errs.shape[:self.ndim] == self.shape, msg.format("errs", errs.shape,"this JKSet", self.shape)
+        assert spectra.shape[:self.ndim] == self.shape, \
+            msg.format("spectra", spectra.shape, "this JKSet", self.shape)
+        assert errs.shape[:self.ndim] == self.shape, \
+            msg.format("errs", errs.shape,"this JKSet", self.shape)
 
         # Check is spectra shape matches errors shape
         msg = "Shape of {} {} and {} {} must match exactly."
-        assert spectra.shape == errs.shape, msg.format("spectra", spectra.shape, "errs", errs.shape)
+        assert spectra.shape == errs.shape, \
+            msg.format("spectra", spectra.shape, "errs", errs.shape)
 
         # Check if number of delays is consistent
         msg = "Number of class delay modes {} must the number of delay modes for {} ({})"
         ndlys = len(self.dlys)
-        assert spectra.shape[self.ndim] == ndlys, msg.format(ndlys, "spectra", spectra.shape[self.ndim])
-        assert errs.shape[self.ndim] == ndlys, msg.format(ndlys, "spectra", errs.shape[self.ndim])
+        assert spectra.shape[self.ndim] == ndlys, \
+            msg.format(ndlys, "spectra", spectra.shape[self.ndim])
+        assert errs.shape[self.ndim] == ndlys, \
+            msg.format(ndlys, "spectra", errs.shape[self.ndim])
 
         # Recursive function for setting spectra and errors.
         def recursive_set(obj, spectra, errs):
             if isinstance(obj, hp.UVPSpec):
-                obj.data_array[0] = np.asarray(np.expand_dims(spectra[None], 2), dtype=np.complex128)
-                obj.stats_array[error_field][0] = np.asarray(np.expand_dims(errs[None], 2), dtype=np.complex128)
+                obj.data_array[0] = np.asarray(np.expand_dims(spectra[None], 2), 
+                                               dtype=np.complex128)
+                obj.stats_array[error_field][0] = np.asarray( 
+                                                np.expand_dims(errs[None], 2), 
+                                                dtype=np.complex128 )
                 obj.check()
                 return obj
             elif isinstance(obj, (list, np.ndarray)):
@@ -302,7 +315,7 @@ class JKSet(object):
 
     def reshape(self, *args):
         """
-        Rehspaes the jkset.
+        Reshapes the jkset.
         
         Returns
         -------

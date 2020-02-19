@@ -24,7 +24,7 @@ class Test_Stats(unittest.TestCase):
         self.uvp = psc.get_pspec("IDR2_1")[0]
 
     def test_stats(self):
-        hs.stats.weightedsum(self.jkset[0])
+        hs.stats.weightedsum(self.jkset)
         zs = hs.stats.zscores(self.jkset, axis=1, z_method="varsum")
         hs.stats.anderson(zs, summary=True, verbose=True)
         stat = hs.stats.kstest(zs, summary=True, verbose=True)
@@ -35,7 +35,8 @@ class Test_Stats(unittest.TestCase):
         hs.stats.kstest(zs[:, 0])
         hs.stats.anderson(zs.flatten())
         
-        nt.assert_raises(NameError, hs.stats.zscores, self.jkset[0], z_method="ahhhhhhhhhhh!!!")
+        nt.assert_raises(NameError, hs.stats.zscores, self.jkset[0], 
+                         z_method="invalidmethod")
     
     
     def test_redgrp_pspec_covariance(self):
