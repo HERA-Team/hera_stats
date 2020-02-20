@@ -16,13 +16,14 @@ class Test_Stats(unittest.TestCase):
     def setUp(self):
         filepath = os.path.join(DATA_PATH, "jack_data.h5")
         pc = hp.container.PSpecContainer(filepath)
-        self.jkset = hs.JKSet(pc, "spl_ants")
+        #self.jkset = hs.JKSet(pc, "spl_ants")
         
         # Load example UVPSpec
         filepath = os.path.join(DATA_PATH, "uvp_data.h5")
         psc = hp.container.PSpecContainer(filepath, mode='r')
         self.uvp = psc.get_pspec("IDR2_1")[0]
-
+    
+    """
     def test_stats(self):
         hs.stats.weightedsum(self.jkset)
         zs = hs.stats.zscores(self.jkset, axis=1, z_method="varsum")
@@ -37,10 +38,9 @@ class Test_Stats(unittest.TestCase):
         
         nt.assert_raises(NameError, hs.stats.zscores, self.jkset[0], 
                          z_method="invalidmethod")
-    
+    """
     
     def test_redgrp_pspec_covariance(self):
-        
         red_grps, red_lens, red_angs = self.uvp.get_red_blpairs()
         grp = red_grps[0]
         if isinstance(grp[0], tuple):
@@ -58,43 +58,54 @@ class Test_Stats(unittest.TestCase):
     
 
 def test_uvp_zscore():
-    ## Get a gaussian noise UVPSpec ##
-    # start w/ a beam
+    # Get a gaussian noise UVPSpec
+    
+    # Start by loading a beam
     beam = os.path.join(DATA_PATH, "HERA_NF_dipole_power.beamfits")
-    # specify baselines
+    
+    # Specify baselines
     bls = [(37, 38), (38, 39), (51, 52), (52, 53), (53, 54), (67, 68)]
-    # load a real file into UVData
+    
+    # Load a real file into UVData
     dfile = os.path.join(DATA_PATH, "zen.even.xx.LST.1.28828.uvOCRSA")
     uvd = UVData()
     uvd.read_miriad(dfile)
-    # replace data w/ gaussian noise
+    
+    # Replace data w/ gaussian noise
     np.random.seed(0)
-    uvd.data_array = stats.norm.rvs(0, 1/np.sqrt(2), uvd.data_array.size).reshape(uvd.data_array.shape) \
-                     + 1j * stats.norm.rvs(0, 1/np.sqrt(2), uvd.data_array.size).reshape(uvd.data_array.shape)
+    x = stats.norm.rvs(0, 1./np.sqrt(2.), uvd.data_array.size).reshape(
+                                                           uvd.data_array.shape)
+    y = stats.norm.rvs(0, 1./np.sqrt(2.), uvd.data_array.size).reshape(
+                                                           uvd.data_array.shape)
+    uvd.data_array = x + 1.j*y
     uvd.flag_array[:] = False
-    # get baseline groups
+    
+    # Get baseline groups
     reds, lens, angs = hp.utils.get_reds(uvd, pick_data_ants=True)
-    uvp = hp.testing.uvpspec_from_data(uvd, reds[:10], spw_ranges=[(50, 100)], beam=beam, verbose=False)
+    uvp = hp.testing.uvpspec_from_data(uvd, reds[:10], spw_ranges=[(50, 100)], 
+                                       beam=beam, verbose=False)
 
-    # bootstrap and average
-    uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, blpair_groups=[uvp.get_blpairs()], 
-                                                          time_avg=True, Nsamples=200, seed=0, 
-                                                          normal_std=True, robust_std=False, cintervals=None)
+    # Bootstrap and average
+    uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(
+                            uvp, blpair_groups=[uvp.get_blpairs()], 
+                            time_avg=True, Nsamples=200, seed=0, 
+                            normal_std=True, robust_std=False, cintervals=None)
 
-    # get zscores
+    # Get zscores
     hs.stats.uvp_zscore(uvp_avg, error_field='bs_std', inplace=True)
     nt.assert_true('bs_std_zscore' in uvp_avg.stats_array.keys())
 
-    # zscore std should be gaussian about 1.0 if errorbars and zscore calc is correct and N = inf
-    # for our case when N != inf, check zscore std is within 1.0 +/- 1/sqrt(uvp.Nblpairs)
-    # this is both a test that bootstrap errorbars are accurate (given uncorrelated noise)
-    # and that the uvp_zscore function does the right arithmetic
+    # zscore std should be gaussian about 1.0 if errorbars and zscore calc is 
+    # correct and N = inf for our case when N != inf, check zscore std is 
+    # within 1.0 +/- 1/sqrt(uvp.Nblpairs) this is both a test that bootstrap 
+    # errorbars are accurate (given uncorrelated noise) and that the uvp_zscore 
+    # function does the right arithmetic
     zscore_std_real = np.std(uvp_avg.stats_array['bs_std_zscore'][0].ravel().real)
     zscore_std_imag = np.std(uvp_avg.stats_array['bs_std_zscore'][0].ravel().imag)
     nt.assert_true(np.abs(1-zscore_std_real) < 1/np.sqrt(uvp.Nblpairs))
     nt.assert_true(np.abs(1-zscore_std_imag) < 1/np.sqrt(uvp.Nblpairs))
 
-    # test inplace
+    # Test inplace
     new_uvp = hs.stats.uvp_zscore(uvp_avg, error_field='bs_std', inplace=False)
     new_uvp.history = ''
     uvp_avg.history = ''

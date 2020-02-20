@@ -32,4 +32,4 @@ class test_testing():
         nt.assert_equal(len(uvp_psc.spectra('IDR2_1')), 2)
 
         jack_psc = hp.PSpecContainer(self.jack_data_name, mode='r')
-        nt.assert_equal(len(jack_psc.spectra("jackknives")), 26)
+        nt.assert_equal(len(jack_psc.spectra("jackknives")), 8) #26)
