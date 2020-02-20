@@ -39,11 +39,11 @@ def _stripe_array(x, stripes, width=1):
 
 def lst_blocks(uvp, blocks=2, lst_range=(0., 2.*np.pi)):
     """
-    Split a UVPSpec object into multiple UVPSpec objects, each containing 
-    spectra within different contiguous LST ranges. There is no guarantee that 
-    each block will contain the same number of spectra or samples.
+    Split a UVPSpec object into multiple objects, each containing spectra 
+    within different contiguous LST ranges. There is no guarantee that each 
+    block will contain the same number of spectra or samples.
     
-    N.B. This function uses the `lst_avg_array` property of the input UVPSpec 
+    N.B. This function uses the `lst_avg_array` property of an input UVPSpec 
     object to split the LSTs (and not the LSTs of the individual visibilities 
     that went into creating each delay spectrum).
     
@@ -69,12 +69,14 @@ def lst_blocks(uvp, blocks=2, lst_range=(0., 2.*np.pi)):
         Array of LST bin edges. This has dimension (blocks+1,).
     """
     # Check validity of inputs
-    assert isinstance(uvp, hp.UVPSpec), "uvp must be a single UVPSpec object."
-    assert lst_range[0] >= 0. and lst_range[1] <= 2.*np.pi, \
-        "lst_range must be in the interval (0, 2*pi)"
-    assert isinstance(blocks, (int, np.int, np.integer)), \
-        "'blocks' must be an integer"
-    assert blocks > 0, "Must have blocks >= 1"
+    if not isinstance(uvp, hp.UVPSpec):
+        raise TypeError("uvp must be a single UVPSpec object.")
+    if not (lst_range[0] >= 0. and lst_range[1] <= 2.*np.pi):
+        raise ValueError("lst_range must be in the interval (0, 2*pi)")
+    if not isinstance(blocks, (int, np.int, np.integer)):
+        raise TypeError("'blocks' must be an integer")
+    if not blocks > 0:
+        raise ValueError("Must have blocks >= 1")
     
     # Get LSTs
     lsts = np.unique(uvp.lst_avg_array)
@@ -129,11 +131,12 @@ def lst_stripes(uvp, stripes=2, width=1, lst_range=(0., 2.*np.pi)):
         List of UVPSpec objects, one for each LST range.
     """
     # Check validity of inputs
-    assert isinstance(uvp, hp.UVPSpec), "uvp must be a single UVPSpec object."
-    assert lst_range[0] >= 0. and lst_range[1] <= 2.*np.pi, \
-        "lst_range must be in the interval (0, 2*pi)"
-    assert isinstance(stripes, (int, np.int, np.integer)), \
-        "'stripes' must be an integer"
+    if not isinstance(uvp, hp.UVPSpec):
+        raise TypeError("uvp must be a single UVPSpec object.")
+    if not (lst_range[0] >= 0. and lst_range[1] <= 2.*np.pi):
+        raise ValueError("lst_range must be in the interval (0, 2*pi)")
+    if not isinstance(stripes, (int, np.int, np.integer)):
+        raise TypeError("'stripes' must be an integer")
     assert stripes > 0, "Must have stripes >= 1"
     assert width > 0, "Must have width >= 1"
     
@@ -483,47 +486,6 @@ def omit_ants(uvp, ant_nums=None, bls=None):
         uvp_list.append(uvp1)
 
     return [uvp_list]
-
-
-def sep_files(uvp, filenames):
-    """
-    Keeps files separate, each one having it's own UVPSpec, but formats them 
-    for jkset.
-
-    Parameters
-    ----------
-    uvp: UVPSpec or list of UVPSpecs
-        One uvpspec loaded from each individual file
-
-    filenames: list of strings
-        The filenames corresponding to UVPSpecs in the same position.
-
-    Returns
-    -------
-    uvp_list: list of UVPSpecs
-        2D list of UVPSpecs that can be submitted to bootstrap or save functions.
-    """
-    raise DeprecationWarning()
-    uvp = copy.deepcopy(uvp)
-
-    if isinstance(uvp, hp.UVPSpec):
-        uvp = [uvp]
-    assert isinstance(uvp, (list, tuple, np.ndarray)), \
-        "uvp must be passed as a list."
-    assert isinstance(uvp[0], hp.UVPSpec), \
-        "uvp list must contain only UVPSpec objects."
-    assert isinstance(filenames, (list, tuple, np.ndarray)), \
-        "Filenames must be a list."
-    assert isinstance(filenames[0], str), \
-        "Filnames must be strings."
-
-    uvp_list = []
-    for i, u in enumerate(uvp):
-        u.labels = np.array([filenames[i]])
-        u.jktype = "sep_files"
-        uvp_list.append([u])
-
-    return uvp_list
 
 
 def split_blps_by_antnum(blps, split='norepeat'):
