@@ -44,7 +44,7 @@ def axes_contains(ax, obj_list):
     return True
 
 
-class Test_Plots(unittest.TestCase):
+class Test_Plot(unittest.TestCase):
 
     def setUp(self):
         filepath = os.path.join(DATA_PATH, "jack_data.h5")
@@ -78,12 +78,12 @@ class Test_Plots(unittest.TestCase):
         jkset = self.jkset
         f, ax = plt.subplots()
 
-        hs.plots.plot_spectra(jkset[0], fig=f)
-        nt.assert_raises(AssertionError, hs.plots.plot_spectra, jkset, fig=f)
-        hs.plots.plot_spectra(jkset[0, 0], fig=f)
+        hs.plot.spectra(jkset[0], fig=f)
+        nt.assert_raises(AssertionError, hs.plot.spectra, jkset, fig=f)
+        hs.plot.spectra(jkset[0, 0], fig=f)
         f.clear()
 
-        hs.plots.plot_spectra(self.zscores, fig=None, logscale=False, 
+        hs.plot.spectra(self.zscores, fig=None, logscale=False, 
                               with_errors=False, show_groups=True)
 
 
@@ -94,18 +94,18 @@ class Test_Plots(unittest.TestCase):
         hs.plots.hist_2d(jkset[:, 0], logscale=True, ax=ax, display_stats=False)
         ax.clear()
 
-        hs.plots.hist_2d(self.zscores, ylim=(-4,4), logscale=False, ax=None, 
+        hs.plots.hist2d(self.zscores, ylim=(-4,4), logscale=False, ax=None, 
                          normalize=True, vmax=0.2)
 
     def test_stats_plots(self):
         jkset = self.jkset
         f, ax = plt.subplots()
 
-        hs.plots.plot_kstest(jkset[0], ax=ax)
-        hs.plots.plot_anderson(jkset[0], ax=ax)
+        hs.plot.kstest(jkset[0], ax=ax)
+        hs.plot.anderson(jkset[0], ax=ax)
 
-        hs.plots.plot_kstest(jkset[0], ax=None)
-        hs.plots.plot_anderson(jkset[0], ax=None)
+        hs.plot.kstest(jkset[0], ax=None)
+        hs.plot.anderson(jkset[0], ax=None)
 
     def test_scatter(self):
         jkset = self.jkset
@@ -114,11 +114,22 @@ class Test_Plots(unittest.TestCase):
         hs.plots.scatter(jkset[0], ax=ax)
         hs.plots.scatter(jkset[0], ax=None, compare=False, logscale=False)
     
+    def test_plot_redgrp_corrmat(self):
+        red_grps, red_lens, red_angs = self.uvp.get_red_blpairs()
+        grp = red_grps[0]
+        if isinstance(grp[0], tuple):
+            # FIXME: This would not be necessary if get_red_blpairs() returned 
+            # properly-formed blpair integers
+            grp = [int("%d%d" % _blp) for _blp in grp]
+        
+        # Calculate delay spectrum correlation matrix for redundant group and plot
+        corr_re, corr_im = hs.stats.redgrp_pspec_covariance(
+                                        self.uvp, grp, dly_idx=3, spw=0, 
+                                        polpair='xx', mode='corr', verbose=True)
+        fig = hs.plotting.plot_redgrp_corrmat(corr_re, grp, cmap='RdBu', 
+                                              figsize=(30.,20.), line_alpha=0.2)
     
     def test_long_waterfall(self):
-        """
-        testing the long waterfall plotting function
-        """
         main_waterfall, freq_histogram, time_histogram, data \
             = hs.plots.long_waterfall(self.d, bl=(38, 68), pol='xx', 
                                       title='Flags Waterfall')

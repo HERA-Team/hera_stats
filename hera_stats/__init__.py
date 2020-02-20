@@ -1,8 +1,6 @@
 # init for hera_stats
-from . import automate, average, flag, noise, plotting, shuffle, split, \
+from . import automate, average, flag, noise, plot, shuffle, split, \
               stats, testing, version
-from . import jackknives, plots # Deprecating these
-from .jkset import JKSet
 
 from hera_pspec.container import PSpecContainer
 
