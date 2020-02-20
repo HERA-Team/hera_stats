@@ -156,173 +156,10 @@ def lst_stripes(uvp, stripes=2, width=1, lst_range=(0., 2.*np.pi)):
     return uvp_list
 
 
-def split_ants(uvp, n_jacks=40, minlen=3, verbose=False):
+
+def hour_angle(uvp, bins_list, specify_bins=False, bls=None):
     """
-    Splits available antenna into two groups randomly, and returns the
-    UVPSpec of each.
-
-    Parameters
-    ----------
-    uvp: list or single UVPSpec
-        The data to use for jackkniving.
-
-    n_jacks: int, optional
-        Number of times to jackknife the data. Default: 40.
-
-    minlen : int, optional
-        Minimum number of baselines needed in final group.
-        Default: 3.
-
-    verbose: boolean, optional
-        If true, prints actions.
-
-    Returns
-    -------
-    uvp: list or single UVPSpec
-        List of hera_pspec.UVPSpec objects that have been split
-        accordingly.
-    """
-    uvp = copy.deepcopy(uvp)
-
-    if isinstance(uvp, (list, tuple, np.ndarray)):
-        if len(uvp) != 1:
-            uvp = hp.uvpspec.combine_uvpspec(uvp)
-        else:
-            uvp = uvp[0]
-    else:
-        assert isinstance(uvp, hp.UVPSpec), \
-            "Expected uvp to be list or UVPSpec, not {}".format(type(uvp).__name__)
-
-    # Load all baselines in uvp
-    bl_array = np.unique([uvp.antnums_to_bl(bl) for blp in uvp.get_blpairs() 
-                          for bl in blp])
-    blns = list(map(uvp.bl_to_antnums, bl_array))
-    ants = np.unique(blns)
-
-    groups = []
-    uvpl = []
-    for i in range(n_jacks):
-
-        if verbose:
-            print("Splitting pspecs for %i/%i jackknives" % (i+1, n_jacks))
-        c = 0
-        blglen = 0
-        while blglen <= len(blns)//6 or blglen <= minlen:
-            # Split antenna into two equal groups
-            grps = np.random.choice(ants, len(ants)//2*2,
-                                    replace=False).reshape(2, -1)
-
-            # Find baselines for which both antenna are in a group            
-            blg = [[], []]
-            for bl in blns:
-                if bl[0] in grps[0] and bl[1] in grps[0]:
-                    blg[0].append(bl)
-                elif bl[0] in grps[1] and bl[1] in grps[1]:
-                    blg[1].append(bl)
-
-            # Find minimum baseline group length
-            blglen = min([len(b) for b in blg])
-
-            # If fails to find big enough group 50 times, raise exception
-            c += 1
-            if c == 50:
-                raise AttributeError("Not enough antenna provided")
-
-        blgroups = []
-        for b in blg:
-            inds = np.random.choice(list(range(len(b))), blglen, replace=False)
-            blgroups.append([uvp.antnums_to_bl(b[i]) for i in inds])
-
-        # Split uvp by groups
-        [uvp1,uvp2] = [uvp.select(bls=b, only_pairs_in_bls=False, inplace=False) 
-                       for b in blgroups]
-
-        # Set metadata for saving
-        uvp1.labels = np.array(list(grps[0]))
-        uvp2.labels = np.array(list(grps[1]))
-        uvp1.jktype = "spl_ants"
-        uvp2.jktype = "spl_ants"
-
-        uvpl.append([uvp1,uvp2])
-
-    return uvpl
-
-
-def stripe_times(uvp, period=None, verbose=False):
-    """
-    Jackknife that splits the UVPSpecData into groups based on
-    the period.
-
-    The period is given in seconds, and data is split based on
-    alternating bins, that is, if the time array is [1,2,3,4,5,6] and the
-    period is 1, then the data will be split into [1,3,5] and [2,4,6].
-    If period is 2, then data will be split into [1,2,5,6] and [3,4].
-    Finally, if period is 3, you get [1,2,3] and [4,5,6]. If no period
-    is profided, it will run a jackknife for every valid and unique
-    period.
-
-    Parameters
-    ----------
-    period: float or list, optional
-        If float, jackknifes a single time using one period. If list,
-        jackknives for every period provided.
-
-    Returns
-    -------
-    uvpl: list
-        List of UVPSpecData objects split accordingly.
-    """
-    uvp = copy.deepcopy(uvp)
-
-    if isinstance(uvp, list):
-        if len(uvp) > 1:
-            uvp = hp.uvpspec.combine_uvpspec(uvp)
-        else:
-            uvp = uvp[0]
-
-    assert isinstance(uvp, hp.UVPSpec), \
-        "Expected uvp to be list or single UVPSpec, not {}".format(type(uvp).__name__)
-
-    if isinstance(period, (int, float, np.float)):
-        period = [period]
-
-    # Convert all times to seconds after first recorded time.
-    times = np.array(sorted(np.unique(uvp.time_avg_array)))
-    secs = (times-times[0])*24*3600
-
-    # If no binsize provided, use every binsize possible and unique
-    if period == None:
-        minperiod = secs[2] - secs[0]
-        allperiods = np.array([len(secs)/n for n in range(2,len(secs))])
-        period = np.unique(allperiods//1) * minperiod
-
-    uvpl = []
-    for per in period:
-        # Phase randomly to broaden search
-        phase = np.random.uniform(0, per)
-        select = np.sin(2*np.pi*(secs + phase)/per) >= 0
-        assert select.any(), "No times selected in random search..."
-
-        # Split times into bins
-        minlen = min([sum(select), sum(~select)])
-        t1 = np.random.choice(times[select], minlen, replace=False)
-        t2 = np.random.choice(times[~select], minlen, replace=False)
-
-        [uvp1, uvp2] = [uvp.select(times=t, inplace=False) for t in [t1, t2]]
-
-        # Set metadata
-        uvp1.labels = np.array(["period_%0.2f_even" % per])
-        uvp2.labels = np.array(["period_%0.2f_odd" % per])
-        uvp1.jktype = "stripe_times"
-        uvp2.jktype = "stripe_times"
-        uvpl.append([uvp1,uvp2])
-
-    return uvpl
-
-
-def split_gha(uvp, bins_list, specify_bins=False, bls=None):
-    """
-    Splits based on the galactic hour-angle at the time of measurement.
+    Splits UVPSpec based on the galactic hour-angle at the time of measurement.
 
     Parameters
     ----------
@@ -368,7 +205,7 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
     if bls is not None:
         uvp.select(bls=bls, inplace=True)
 
-    # Create reference lst -> time_avg dictionary (for sorting).
+    # Create reference lst -> time_avg dictionary (for sorting)
     ref = dict(list(zip(uvp.lst_avg_array, uvp.time_avg_array)))
     rads = np.unique(uvp.lst_avg_array)
 
@@ -395,12 +232,11 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
             jdays = [ref[rads[i]] for i in range(len(rads)) if val[i] == True]
 
             if sum(jdays) == 0:
-                raise AttributeError("No times found in one or more of the bins specified.")
-
+                raise AttributeError("No times found in one or more of the "
+                                     "bins specified.")
             _uvp = uvp.select(times=jdays, inplace=False)
 
             # Set metadata
-            _uvp.jktype = "spl_gha"
             angs = gha.l.deg[val]
             angs_180 = (angs + 180) % 360
             if np.std(angs) <= np.std(angs_180):
@@ -415,6 +251,7 @@ def split_gha(uvp, bins_list, specify_bins=False, bls=None):
     return uvpl
 
 
+#*********#
 def omit_ants(uvp, ant_nums=None, bls=None):
     """
     Splits UVPSpecs into groups, omitting one antenna from each.
@@ -488,40 +325,47 @@ def omit_ants(uvp, ant_nums=None, bls=None):
     return [uvp_list]
 
 
-def split_blps_by_antnum(blps, split='norepeat'):
+def blps_by_antnum(blps, split='norepeat'):
     """
-    Split a list of redundant groups of baseline-pairs into two; 
-    one where the same antenna is never used more than once in 
-    a blpair, and one where it is.
+    Split a list of redundant groups of baseline-pairs into two, depending on 
+    whether there are repeated antennas in the baseline pair (`norepeat`), or 
+    whether there are auto baselines in the pair (`noautos`).
     
     Parameters
     ----------
     blps : list of list of blpairs
-        List of redundant groups of baseline-pairs. The blps can 
-        be either tuples of tuples, or blpair integers.
+        List of redundant groups of baseline-pairs. The blps can be either 
+        tuples of tuples, or blpair integers.
     
     split : str, optional
-        Type of split to perform on each baseline group. Available  
-        options are:
+        Type of split to perform on each baseline group. Available options are:
         
         - 'norepeat':
-            Split into one group where antennas are used at most 
-            once per blpair, and another where they are used 
-            more than once.
+            Split into one group where antennas are used at most once per 
+            blpair, and another where they are used more than once.
             
-        - 'noauto': 
-            Split into one group with auto-blpairs and one group 
-            with non-autos (but antennas can be used more than 
-            once per blpair).
-         
+        - 'noautos': 
+            Split into one group with auto-blpairs and one group with non-autos 
+            (but antennas can be used more than once per blpair).
          
     Returns
     -------
     blps_a, blps_b : list of list of blpairs
         List of redundant groups of baseline-pairs.
+        
+         - For 'norepeat', group A contains the blps *without* repeated 
+           antennas, while group B contains the blps *with* repeated antennas.
+         
+         - For 'noautos', group A contains the blps *without* auto-baselines, 
+           while group B contains the blps *with* auto-baselines.
     """
-    if split not in ['norepeat',]:
-        raise ValueError("split type '%s' not recognized." % split)
+    # Check that input blps is list of lists
+    if not isinstance(blps[0], list):
+        raise TypeError("blps must be a list of lists of baseline-pairs")
+    
+    # Check for valid split type
+    if split not in ['norepeat', 'noautos']:
+        raise ValueError("Split type '%s' not recognized." % split)
     
     # Loop over redundant groups
     blps_a, blps_b = [], []
@@ -533,21 +377,21 @@ def split_blps_by_antnum(blps, split='norepeat'):
             
             # Convert into antnum pairs if not already
             if isinstance(blp, int):
-                blp = uvp.blpair_to_antnums(blp)
+                blp = hp.uvputils._blpair_to_antnums(blp)
             
             # Split according to whether antenna numbers are repeated
             if split == 'norepeat':
                 # Split out 
                 if np.unique(blp).size == 4:
-                    grp_a.append(blp)
+                    grp_a.append(blp) # without repeated antennas
                 else:
-                    grp_b.append(blp)
-            elif split == 'noauto':
+                    grp_b.append(blp) # with repeated antennas
+            elif split == 'noautos':
                 # Split out blpairs being multiplied by themselves
                 if sorted(blp[0]) == sorted(blp[1]):
-                    grp_a.append(blp)
+                    grp_b.append(blp) # with repeated baselines
                 else:
-                    grp_b.append(blp)
+                    grp_a.append(blp) # without repeated baselines
             
         blps_a.append(grp_a)
         blps_b.append(grp_b)

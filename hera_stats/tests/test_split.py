@@ -52,28 +52,13 @@ class Test_split(unittest.TestCase):
         nt.assert_raises(TypeError, hs.split.lst_stripes, self.psc, 
                          2, 1, (0., np.pi)) # invalid type
     
-    def test_split_ants(self):
+    def test_hour_angle(self):
         np.random.seed(0)
-        uvpl = hs.split.split_ants([self.uvp], 1, verbose=True)
-        nt.assert_raises(AssertionError, hs.split.split_ants, 20000)
-        nt.assert_raises(AssertionError, hs.split.split_ants,
-                        [self.uvp]*2, 1, True)
-
-    def test_stripe_times(self):
-        np.random.seed(0)
-        uvp = hs.split.stripe_times(self.uvp, verbose=True)
-        uvp = hs.split.stripe_times(self.uvp, 10.)
-        uvp = hs.split.stripe_times(self.uvp, [10., 20.])
-        nt.assert_equal(np.array(uvp).shape, (2, 2))
-        nt.assert_raises(AssertionError, hs.split.stripe_times, np.array([]))
-
-    def test_split_gha(self):
-        np.random.seed(0)
-        uvp = hs.split.split_gha([self.uvp], bins_list=[1])
-        uvp = hs.split.split_gha(self.uvp, 
+        uvp = hs.split.hour_angle([self.uvp], bins_list=[1])
+        uvp = hs.split.hour_angle(self.uvp, 
                                  bins_list=[np.linspace(228.2, 228.3, 1)], 
                                  specify_bins=True)  
-        nt.assert_raises(AttributeError, hs.split.split_gha, self.uvp, 
+        nt.assert_raises(AttributeError, hs.split.hour_angle, self.uvp, 
                          [(0,1,2)], True)
 
     def test_omit_ants(self):
@@ -81,8 +66,36 @@ class Test_split(unittest.TestCase):
         uvp = hs.split.omit_ants([self.uvp], [37, 38, 39])
         nt.assert_equals(np.asarray(uvp).shape, (1, 3))
         uvp = hs.split.omit_ants([self.uvp], 37)
-
-
+    
+    def test_blps_by_antnum(self):
+        # Get redundant baseline-pair groups
+        blps, lens, angs = self.uvp.get_red_blpairs()
+        
+        # Split into groups without (A) and with (B) repeated antennas
+        blps_a, blps_b = hs.split.blps_by_antnum(blps, split='norepeat')
+        for grp in blps_a:
+            for blp in grp:
+                nt.assert_equal(np.unique(blp).size, 4) # expects 4 unique ants
+        for grp in blps_b:
+            for blp in grp:
+                nt.assert_not_equal(np.unique(blp).size, 4) # expects <4 unique ants
+        
+        # Split into groups without (A) and with (B) auto-bl pairs
+        blps_a, blps_b = hs.split.blps_by_antnum(blps, split='noautos')
+        for grp in blps_a:
+            for blp in grp:
+                nt.assert_not_equal(sorted(blp[0]), sorted(blp[1])) # no autos
+        for grp in blps_b:
+            for blp in grp:
+                nt.assert_equal(sorted(blp[0]), sorted(blp[1])) # expect autos
+        
+        # Test error checks
+        # Invalid split type
+        nt.assert_raises(ValueError, hs.split.blps_by_antnum, blps, 'xx')
+        
+        # blps not passed as list of lists
+        nt.assert_raises(TypeError, hs.split.blps_by_antnum, blps[0], 'noautos')
+        
 if __name__ == "__main__":
     unittest.main()
 
