@@ -503,6 +503,7 @@ def sep_files(uvp, filenames):
     uvp_list: list of UVPSpecs
         2D list of UVPSpecs that can be submitted to bootstrap or save functions.
     """
+    raise DeprecationWarning()
     uvp = copy.deepcopy(uvp)
 
     if isinstance(uvp, hp.UVPSpec):
