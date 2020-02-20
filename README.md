@@ -74,4 +74,4 @@ with examples of how to use various features of `hera_stats`.
 * `plot`: A wide variety of diagnostic plotting functions. These include a function to generate long waterfalls plots of `nsamples` or `flags` across many files (`long_waterfall`), including summary statistics on the flag fraction for each time/frequency bin.
 * `shuffle`: Functions to randomly shuffle data. This includes a function to construct new visibilities by shuffling samples from a set of visibilities within the same redundant baseline group (`shuffle_data_redgrp`).
 * `split`: A range of convenience functions for splitting data in various ways.
-* `stats`: Various statistical convenience functions to compared jackknife power spectra.
+* `stats`: Various statistical convenience functions to compare jackknife power spectra.
