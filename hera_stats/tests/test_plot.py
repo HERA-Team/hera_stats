@@ -86,6 +86,7 @@ class Test_Plot(unittest.TestCase):
         fig = hs.plot.redgrp_corrmat(corr_re, grp, cmap='RdBu', 
                                      figsize=(30.,20.), line_alpha=0.2)
     
+    
     def test_scatter_bandpowers(self):
         red_grps, red_lens, red_angs = self.uvp.get_red_blpairs()
         n_dlys = self.uvp.get_dlys(0).size

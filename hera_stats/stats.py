@@ -101,7 +101,7 @@ def redgrp_pspec_covariance(uvp, red_grp, dly_idx, spw, polpair, mode='cov',
     """
     # Check inputs
     if mode not in ['cov', 'corr']:
-        raise ValueError("")
+        raise ValueError("mode '%s' not recognized." % mode)
     if not isinstance(red_grp, list):
         raise TypeError("red_grp must be a list of blpairs.")
     
