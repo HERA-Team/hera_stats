@@ -52,11 +52,10 @@ class Test_Plot(unittest.TestCase):
         
         # Load jackknives from container
         pc = hp.container.PSpecContainer(filepath)
-        self.jkset = hs.JKSet(pc, "spl_ants", error_field='bs_std')
-        self.zscores = hs.stats.zscores(self.jkset, axis=1, 
-                                        z_method="varsum", 
-                                        error_field='bs_std').T()
-        
+        #self.jkset = hs.JKSet(pc, "spl_ants", error_field='bs_std')
+        #self.zscores = hs.stats.zscores(self.jkset, axis=1, 
+        #                                z_method="varsum", 
+        #                                error_field='bs_std').T()
         
         self.dfiles = ['zen.even.xx.LST.1.28828.uvOCRSA', 
                        'zen.odd.xx.LST.1.28828.uvOCRSA']
@@ -69,11 +68,16 @@ class Test_Plot(unittest.TestCase):
             _d.read_miriad(os.path.join(PSPEC_DATA_PATH, dfile))
             self.d.append(_d)
         
+        # Load example UVPSpec
+        filepath = os.path.join(DATA_PATH, "uvp_data.h5")
+        psc = hp.container.PSpecContainer(filepath, mode='r')
+        self.uvp = psc.get_pspec("IDR2_1")[0]
+        
         # data to use when testing the plotting function
         #self.data_list = [self.d[0].get_flags(38, 68, 'xx'), 
         #                  self.d[1].get_flags(38, 68, 'xx')]
          
-        
+    """
     def test_plot_spectra(self):
         jkset = self.jkset
         f, ax = plt.subplots()
@@ -113,6 +117,7 @@ class Test_Plot(unittest.TestCase):
 
         hs.plots.scatter(jkset[0], ax=ax)
         hs.plots.scatter(jkset[0], ax=None, compare=False, logscale=False)
+    """
     
     def test_plot_redgrp_corrmat(self):
         red_grps, red_lens, red_angs = self.uvp.get_red_blpairs()
@@ -126,13 +131,13 @@ class Test_Plot(unittest.TestCase):
         corr_re, corr_im = hs.stats.redgrp_pspec_covariance(
                                         self.uvp, grp, dly_idx=3, spw=0, 
                                         polpair='xx', mode='corr', verbose=True)
-        fig = hs.plotting.plot_redgrp_corrmat(corr_re, grp, cmap='RdBu', 
-                                              figsize=(30.,20.), line_alpha=0.2)
+        fig = hs.plot.plot_redgrp_corrmat(corr_re, grp, cmap='RdBu', 
+                                          figsize=(30.,20.), line_alpha=0.2)
     
     def test_long_waterfall(self):
         main_waterfall, freq_histogram, time_histogram, data \
-            = hs.plots.long_waterfall(self.d, bl=(38, 68), pol='xx', 
-                                      title='Flags Waterfall')
+            = hs.plot.long_waterfall(self.d, bl=(38, 68), pol='xx', 
+                                     title='Flags Waterfall')
         
         # Make sure the main waterfall has the right number of dividing lines
         if np.round(data.shape[0]/60, 0) == 0: 
@@ -152,9 +157,9 @@ class Test_Plot(unittest.TestCase):
         
         # Check to make sure transform kwarg works (i.e. no errors)
         main_waterfall, freq_histogram, time_histogram, data \
-            = hs.plots.long_waterfall(self.d, bl=(38, 68), pol='xx', 
-                                      title='Flags Waterfall', mode='data', 
-                                      operator='phase')
+            = hs.plot.long_waterfall(self.d, bl=(38, 68), pol='xx', 
+                                     title='Flags Waterfall', mode='data', 
+                                     operator='phase')
 
     
 if __name__ == "__main__":
