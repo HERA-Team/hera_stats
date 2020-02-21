@@ -3,6 +3,7 @@ from . import stats, utils
 from pyuvdata import UVData
 import hera_pspec as hp
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from matplotlib import gridspec
 
 
@@ -347,3 +348,51 @@ def redgrp_corrmat(corr, red_grp, cmap='RdBu', figsize=(30.,20.),
     return fig
 
 
+def antenna_matrix(mat, ants, label=None, cmap='viridis'):
+    """
+    Plot 2D square array, intended to be a matrix of antenna vs antenna values 
+    of some quantity.
+    
+    Parameters
+    ----------
+    mat : array_like
+        2D square array containing matrix values to be plotted.
+    
+    ants : array_like
+        1D array of unique antennas represented in the matrix, in the same 
+        ordering as the input matrix.
+    
+    label : str, optional
+        Label for the plot (displayed as the colorbar label). Default: None.
+    
+    cmap : str, optional
+        Matplotlib colormap name. Default: 'viridis'.
+    
+    Returns
+    -------
+    fig : matplotlib.Figure
+        Matplotlib figure containing matshow.
+    """
+    # Plot matrix as matshow
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    cax = ax.matshow(mat, cmap=cmap)
+    cbar = fig.colorbar(cax, fraction=0.045, pad=0.04) # reduce cbar height
+    cbar.set_label(label, fontsize=16)
+
+    # Add grid
+    for j in np.arange(0, ants.size, 10):
+        plt.axvline(j, color='k', alpha=0.2, ls='dashed')
+        plt.axhline(j, color='k', alpha=0.2, ls='dashed')
+
+    # Add tick labels for each antenna
+    ant_lbls = ["%d" % ant for ant in ants]
+    ax.set_xticklabels([''] + ant_lbls, rotation=90.)
+    ax.set_yticklabels([''] + ant_lbls)
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
+    
+    # Set sizes
+    plt.gcf().set_size_inches((12., 12.))
+    return fig
+    
