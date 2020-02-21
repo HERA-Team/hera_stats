@@ -84,17 +84,27 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
         
         # Try to load UVData from file
         if isinstance(_uvd, str):
-            uvd = UVData()
-            if file_type == "uvh5":
-                # Do partial load
-                if isinstance(bl, (int, np.int)):
-                    raise TypeError("Baseline 'bl' must be specified as an "
-                                    "antenna pair to use the partial load "
-                                    "feature.")
-                uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
-            else:
-                # Load the whole file!
-                uvd.read(_uvd, file_type=file_type)
+            try:
+                uvd = UVData()
+                if file_type == "uvh5":
+                    
+                    # Do partial load
+                    if isinstance(bl, (int, np.int)):
+                        raise TypeError("Baseline 'bl' must be specified as an "
+                                        "antenna pair to use the partial load "
+                                        "feature.")
+                    uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
+                else:
+                    
+                    # Load the whole file
+                    uvd.read(_uvd, file_type=file_type)
+            except OSError:
+                # Common issue is that wrong file_type is being used
+                import sys
+                print("long_waterfall: file_type = '%s'" % file_type, 
+                      file=sys.stderr)
+                raise
+                
         elif isinstance(_uvd, UVData):
             # Already loaded into UVData object
             uvd = _uvd

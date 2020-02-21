@@ -59,6 +59,10 @@ class Test_Plot(unittest.TestCase):
         
         self.dfiles = ['zen.even.xx.LST.1.28828.uvOCRSA', 
                        'zen.odd.xx.LST.1.28828.uvOCRSA']
+        self.dfile_paths = [os.path.join(PSPEC_DATA_PATH, dfile) 
+                            for dfile in self.dfiles]
+        self.uvh5_files = [ os.path.join(PSPEC_DATA_PATH, 
+                                         'zen.2458116.31193.HH.uvh5'),]
         self.baseline = (38, 68, 'xx')
         
         # Load datafiles into UVData objects
@@ -155,13 +159,38 @@ class Test_Plot(unittest.TestCase):
         freq_elems = [(matplotlib.lines.Line2D, 1)]
         nt.assert_true(axes_contains(freq_histogram, freq_elems))
         
-        # Check to make sure transform kwarg works (i.e. no errors)
-        main_waterfall, freq_histogram, time_histogram, data \
-            = hs.plot.long_waterfall(self.d, bl=(38, 68), pol='xx', 
-                                     title='Flags Waterfall', mode='data', 
-                                     operator='phase')
-
-    
+        # Check to make sure operator kwarg works (i.e. no errors)
+        wfall, hfreq, htime, data = hs.plot.long_waterfall(
+                                       self.d, bl=(38, 68), pol='xx', 
+                                       title='x', mode='data', operator='phase')
+        wfall, hfreq, htime, data = hs.plot.long_waterfall(
+                                       self.d, bl=(38, 68), pol='xx', 
+                                       title='x', mode='data', operator='real')
+        wfall, hfreq, htime, data = hs.plot.long_waterfall(
+                                       self.d, bl=(38, 68), pol='xx', 
+                                       title='x', mode='data', operator='imag')
+        nt.assert_raises(ValueError, hs.plot.long_waterfall,
+                                       self.d, bl=(38, 68), pol='xx', 
+                                       title='x', mode='data', operator='xxx')
+        
+        # Check to make sure passing filenames instead of UVData works
+        wfall, hfreq, htime, data = hs.plot.long_waterfall(
+                                     self.dfile_paths, bl=(38, 68), pol='xx', 
+                                     title='x', mode='data', file_type='miriad')
+        wfall, hfreq, htime, data = hs.plot.long_waterfall(
+                                     self.uvh5_files, bl=(23, 24), pol='xx', 
+                                     title='x', mode='data', file_type='uvh5')
+        
+        # Check for input kwarg errors
+        # Incorrect input data/filename type (must be list of UVData or str)
+        nt.assert_raises(TypeError, hs.plot.long_waterfall,
+                                       [1, 2], bl=(38, 68), pol='xx', 
+                                       title='x', mode='data')
+        # Integer bls not allowed if partial loading being used
+        nt.assert_raises(TypeError, hs.plot.long_waterfall,
+                                       self.uvh5_files, bl=123124, pol='xx', 
+                                       title='x', mode='data', file_type='uvh5')
+                                       
 if __name__ == "__main__":
     unittest.main()
 
