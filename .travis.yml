@@ -30,7 +30,7 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls jupyter
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls coverage jupyter
   - source activate test-environment
   - conda env update -n test-environment -f environment.yml
   - pip install -e .  # force it to have a GIT_INFO file in the repo directory
