@@ -194,9 +194,22 @@ def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[],
     return main_waterfall, freq_histogram, time_histogram, data
 
 
-def plot_delay_scatter(uvp, x_dly, y_dly, keys, mode='abs', label=None, ax=None):
+def scatter_bandpowers(uvp, x_dly, y_dly, keys, operator='abs', label=None, 
+                       ax=None):
     """
+    Scatter plot of delay spectrum bandpowers from two different delay bins. 
+    The bandpowers can be taken from multiple spws / blpairs / polpairs at the 
+    same time (see the `keys` argument).
     
+    Example of `keys` argument:
+    .. highlight:: python
+    .. code-block:: python
+        red_grps, red_lens, red_angs = uvp.get_red_blpairs()
+        keys = {
+            'spws':     0,
+            'blpairs':  red_grps[0],
+            'polpairs': uvp.get_polpairs(),
+        }
     
     Parameters
     ----------
@@ -208,12 +221,31 @@ def plot_delay_scatter(uvp, x_dly, y_dly, keys, mode='abs', label=None, ax=None)
     
     keys : dict
         Dictionary with keys 'spws', 'blpairs', 'polpairs', which can be lists 
-        or single values.
+        or single values. This allows bandpowers from multiple spws / blpairs / 
+        polpairs to be plotted simultaneously.
+    
+    operator : str, optional
+        If mode='data', the operator to apply when plotting the data. Can be 
+        'real', 'imag', 'abs', 'phase'. Default: 'abs'. Default: 'abs'.
+    
+    label : str, optional
+        Label to use for this set of data in the plot legend. Default: None.
+    
+    ax : matplotlib.axes, optional
+        Default: None.
     
     Returns
     -------
-    
+    ax : matplotlib.axes
+        Matplotlib Axes instance.
     """
+    if 'spws' not in keys:
+        raise KeyError("keys dict has missing 'spws' key")
+    if 'blpairs' not in keys:
+        raise KeyError("keys dict has missing 'blpairs' key")
+    if 'polpairs' not in keys:
+        raise KeyError("keys dict has missing 'polpairs' key")
+    
     # Check that dict items are all lists
     for key in ['spws', 'blpairs', 'polpairs']:
         if not isinstance(keys[key], (list, np.ndarray)):
@@ -229,23 +261,25 @@ def plot_delay_scatter(uvp, x_dly, y_dly, keys, mode='abs', label=None, ax=None)
                 y = np.concatenate( (y, ps[:,y_dly].flatten()) )
     
     # Apply transform corresponding to chosen mode
-    modes = {'abs': np.abs, 'phase': np.angle, 'real': np.real, 'imag': np.imag}
-    if mode not in modes.keys():
-        raise KeyError("mode '%s' not recognized; must be one of %s" \
-                        % (mode, list(modes.keys())) )
-    x = modes[mode](x)
-    y = modes[mode](y)
+    ops = {'abs': np.abs, 'phase': np.angle, 'real': np.real, 'imag': np.imag}
+    if operator not in ops.keys():
+        raise KeyError("Operator '%s' not recognized; must be one of %s" \
+                        % (operator, list(ops.keys())) )
+    x = ops[operator](x)
+    y = ops[operator](y)
     
-    # Create plot
+    # Create plot if needed
     if ax is None:
         ax = plt.subplot(111)
     
+    # Plot points
     ax.plot(x, y, marker='.', ls='none', label=label)
+    ax.legend()
     return ax
 
 
-def plot_redgrp_corrmat(corr, red_grp, cmap='RdBu', figsize=(30.,20.), 
-                        line_alpha=0.2):
+def redgrp_corrmat(corr, red_grp, cmap='RdBu', figsize=(30.,20.), 
+                   line_alpha=0.2):
     """
     Plot the correlation matrix for a set of delay spectra in a redundant 
     group. See `hera_stats.stats.redgrp_pspec_covariance()` for a function to 
