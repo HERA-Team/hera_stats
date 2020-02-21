@@ -166,7 +166,13 @@ class Test_Plot(unittest.TestCase):
         nt.assert_raises(TypeError, hs.plot.long_waterfall,
                                        self.uvh5_files, bl=123124, pol='xx', 
                                        title='x', mode='data', file_type='uvh5')
-                                       
+    
+    def test_antenna_matrix(self):
+        # Check to see if function runs
+        ants = np.arange(7)
+        mat = np.outer(ants, ants)
+        fig = hs.plot.antenna_matrix(mat, ants, label="test", cmap='viridis')
+                          
 if __name__ == "__main__":
     unittest.main()
 

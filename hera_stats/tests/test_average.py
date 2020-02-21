@@ -133,7 +133,6 @@ class test_average():
         
         # Get list of unique bls
         bls = self.uvd.get_antpairs()
-        print("num bls:", len(bls))
         pol = self.uvd.polarization_array[0]
         
         # Try to run function
@@ -145,6 +144,25 @@ class test_average():
                                                       return_mean=True)
         nt.assert_equal(mean.shape, diffs[0].shape)
     
+    def test_redundant_diff_summary(self):
+        
+        # Get redundant baselines contained in test UVData object
+        red_bls, lens, angs = hp.utils.get_reds(self.uvd, bl_error_tol=1.0, 
+                                                add_autos=False,
+                                                bl_len_range=(12., 100.), 
+                                                bl_deg_range=(0., 360.),
+                                                pick_data_ants=True)
+        # Get polarization
+        pol = self.uvd.polarization_array[0]
+        
+        # Try to run function
+        op = lambda d, m: np.max(d.real)
+        uniq_ants, mat = hs.average.redundant_diff_summary(
+                                          self.uvd, red_bls, pol, 
+                                          op_upper=op, op_lower=op, 
+                                          verbose=True)
+        nt.assert_equal(mat.shape[0], uniq_ants.size)
+        
 if __name__ == "__main__":
     unittest.main()
 

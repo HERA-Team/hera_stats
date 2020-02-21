@@ -209,3 +209,95 @@ def redundant_diff(uvd, bls, pol, return_mean=False):
         return bls, diffs, grp_mean
     return bls, diffs
 
+
+def redundant_diff_summary(uvd, red_bls, pol, op_upper=np.max, op_lower=None, 
+                           verbose=False):
+    """
+    Calculate summary stats on the differences of baselines with the mean 
+    of their redundant group. Returns an antenna-antenna matrix where each 
+    element is the value of the summary statistic for a given antenna pair.
+    
+    See `hera_stats.plot.antenna_matrix` for an accompanying plotting function.
+    
+    Parameters
+    ----------
+    uvd : UVData
+        Visibility data object.
+    
+    red_bls : list of lists
+        List of redundant baseline group lists.
+    
+    pol : str or int
+        String or integer specifying the polarization to use.
+    
+    op_upper : func
+        Function that operates on the difference waterfall (visibility for 
+        baseline minus the mean over its redundant group) to return a single 
+        number, to be used as the summary statistic for that baseline. 
+        
+        Functions must have the following signature:
+        
+            scalar = func(d, grp_mean)
+        
+        where `d` is the difference data (a 2D complex array) and `grp_mean` 
+        is the mean over the redundant group (also a 2D complex array).
+        
+        The values of the summary statistic are placed on the upper triangle 
+        of the output matrix.
+    
+    op_lower : func, optional
+        Same as `op_upper`, but places values on the lower triangle of the 
+        output matrix.
+    
+    verbose : bool, optional
+        Whether to print progress messages. Default: False.
+    
+    Returns
+    -------
+    unique_ants : array_like
+        Ordered array of unique antennas that were found in the redundant 
+        groups.
+    
+    mat : array_like
+        2D array of summary statistic values for every pair of antennas.
+        
+        NB. np.nan values are returned for antenna pairs that were not present 
+        in the data/redundant baseline list.
+    """
+    # Find unique antennas in redundant bl list
+    unique_ants = []
+    for grp in red_bls:
+        for bl in grp:
+            for ant in bl:
+                if ant not in unique_ants:
+                    unique_ants.append(ant)
+    unique_ants.sort()
+    unique_ants = np.array(unique_ants, dtype=np.int)
+    
+    # Construct (empty) matrix of antenna-antenna pairs
+    mat = np.zeros((unique_ants.size, unique_ants.size))
+    mat += np.nan # set to NaN to show where there is no data
+    
+    # Loop over redundant groups and calculate diffs
+    for i, grp in enumerate(red_bls):
+        if i % 5 == 0 and verbose: print("Red. group %d" % i)
+        kept_bls, diffs, grp_mean = redundant_diff(uvd, grp, pol=pol, 
+                                                   return_mean=True)
+        # Loop over baselines
+        for bl, d in zip(kept_bls, diffs):
+            
+            # Calculate statistic for each bl in redundant group by calling 
+            # specified operator
+            y_upper = op_upper(d, grp_mean)
+            if op_lower is not None:
+                y_lower = op_lower(d, grp_mean)
+
+            # Store in matrix
+            idx0 = np.where(unique_ants == bl[0])
+            idx1 = np.where(unique_ants == bl[1])
+            mat[idx0, idx1] = y_upper # upper triangle
+            if op_lower is not None:
+                mat[idx1, idx0] = y_lower # lower triangle
+            
+    return unique_ants, mat
+    
