@@ -1,9 +1,3 @@
-import numpy as np
-from . import stats, utils
-from pyuvdata import UVData
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
-
 
 def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
                  z_method="weightedsum", zlim=5, logscale=True):
@@ -26,7 +20,8 @@ def plot_spectra(jkset, fig=None, show_groups=False, with_errors=True,
         If true, plots errorbars and zscores.
 
     z_method: string, optional
-        The method to use for calculating and displaying zscores. Default: weightedsum.
+        The method to use for calculating and displaying zscores. Default: 
+        weightedsum.
 
     zlim: int or float, optional
         Limit of the zscore subplot y axis.
@@ -184,6 +179,7 @@ def scatter(jkset, ax=None, ylim=None, compare=True, logscale=True):
     ax.set_ylim(border[0], border[1])
     ax.set_title("Scatter Plot of Data")
 
+
 def hist_2d(jkset, ax=None, ybins=40, display_stats=True,
             vmax=None, normalize=False, ylim=None, logscale=True):
     """
@@ -275,7 +271,7 @@ def hist_2d(jkset, ax=None, ybins=40, display_stats=True,
     ax.set_xlabel("Delay (ns)")
 
 
-def plot_kstest(jkset, ax=None, cdf=None):
+def kstest(jkset, ax=None, cdf=None):
     """
     Plots the Kolmogorov-Smirnov test for each delay mode.
 
@@ -319,7 +315,8 @@ def plot_kstest(jkset, ax=None, cdf=None):
     ax.set_ylim(0, 1.2)
     ax.grid(True)
 
-def plot_anderson(jkset, ax=None):
+
+def anderson(jkset, ax=None):
     """
     Plots the Anderson-Darling test for the normality of each delay mode.
 
@@ -369,180 +366,316 @@ def plot_anderson(jkset, ax=None):
     ax.grid(True)
 
 
-def long_waterfall(uvd_list, bl, pol, title=None, cmap='gray', starting_lst=[], 
-                   mode='nsamples', operator='abs', file_type='uvh5', 
-                   figsize=(20, 80)):
-    """    
-    Generates a waterfall plot of flags or nsamples with axis sums from an
-    input array.
-    
+def weighted_average(jkset, axis=0, error_field='bs_std'):
+    """
+    Calculates the variance-weighted average of the spectra over a specific 
+    axis. The averages and errors are calculated as follows (for spectra x_i 
+    with errors err_i):
+        
+        w_i = 1 / (err_i)^2
+        mean = \sum_i(w_i x_i) / \sum_i(w_i)
+        var_mean = 1. / sum_i(w_i)
+        std = sqrt(var_mean * len(x))
+
+    Thus, std is not the uncertainty on the average but the standard deviation
+    of the distribution of x.
+
     Parameters
     ----------
-    uvd_list : list of UVData objects or list of str
-        List of UVData objects to be stacked and displayed. If a list of 
-        strings is specified, each UVData object will be loaded one at a time 
-        (reduces peak memory consumption).
-    
-    bl : int or tuple
-        Baseline integer or antenna pair tuple of the baseline to plot.
-    
-    pol : str or int
-        Polarization string or integer.
-    
-    title : str, optional
-        Title of the plot. Default: none.
-    
-    cmap : str, optional
-        Colormap parameter for the waterfall plot. Default: 'gray'.
-        
-    starting_lst : list, optional
-        list of starting lst to display in the plot
-    
-    mode : str, optional
-        Which array to plot from the UVData objects. Options: 'data', 'flags', 
-        'nsamples'. Default: 'nsamples'. 
-    
-    operator : str, optional
-        If mode='data', the operator to apply when plotting the data. Can be 
-        'real', 'imag', 'abs', 'phase'. Default: 'abs'.
-    
-    file_type : str, optional
-        If `uvd_list` is passed as a list of strings, specifies the file type 
-        of the data files to assume when loading them. Default: 'uvh5'.
-    
-    figsize : tuple, optional
-        The size of the figure, in inches. Default: (20, 80).
-    
+    jkset: hera_stats.jkset.JKSet
+        JKSet with which to perform the weighted sum.
+
+    axis: int, 0 or 1, optional
+        Axis along which to do the weighted sum. Default: 0.
+
     Returns
     -------
-    main_waterfall : matplotlib.axes
-        Matplotlib Axes instance of the main plot
-        
-    freq_histogram : matplotlib.axes
-        Matplotlib Axes instance of the sum across times
-        
-    time_histogram : matplotlib.axes
-        Matplotlib Axes instance of the sum across freqs
-        
-    data : numpy.ndarray
-        A copy of the stacked_array output that is being displayed
+    jkset_avg: 1D JKSet
+        The average jkset, with errors that describe the standard deviation
+        of the samples given.
     """
-    # Check data operator is valid (if specified)
-    if mode == 'data':
-        if operator == 'abs':
-            op = np.abs
-        elif operator == 'real':
-            op = np.real
-        elif operator == 'imag':
-            op = np.imag
-        elif operator == 'phase':
-            op = np.angle
-        else:
-            raise ValueError("'%s' is not a valid value for the operator kwarg. "
-                             "Valid options: ['real', 'imag', 'abs', 'phase']" \
-                             % operator)
+    jk = copy.deepcopy(jkset)
+
+    if isinstance(axis, int): axis = (axis,)
+    assert isinstance(jkset, jkset_lib.JKSet), \
+        "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert all([ax < jk.ndim for ax in axis]), \
+        "Axis %s was specified but jkset only has %d axes." % (axis, jk.ndim)
     
-    arr_list = []
-    for _uvd in uvd_list:
+    print("jk.spectra:", jk.spectra.shape)
+    
+    # Do weighted sum calculation
+    w = 1. / jk.errs**2. # weights
+    var_avg = 1. / np.sum(w, axis=axis) # variance of weighted mean
+    avg = var_avg * np.sum(w * jk.spectra, axis=axis) # weighted mean
+    std = np.sqrt(var_avg * len(jk.spectra)) 
+
+    # Average/sum metadata, as appropriate
+    nsamp = np.sum(jk.nsamples, axis=axis)
+    integrations = np.average(jk.integrations, axis=axis)
+    times = np.average(jk.times, axis=axis)
+    
+    # If the spectra were averaged down to a single spectrum, of shape (Ndlys,), 
+    # expand to (1, Ndlys).
+    """
+    if len(av.shape[:-1]) == 0:
+        targ_shape = (1, )
+        av = av[None]
+        std = std[None]
+        nsamp = nsamp[None]
+        integrations = integrations[None]
+        times = times[None]
+    """
+    
+    # Slice jk to match shape of avg and std
+    key = [0] * jk.ndim
+    for i in range(jk.ndim):
+        if i not in axis:
+            key[i] = slice(None, None, 1)
+    jkav = jk[tuple(key)]
+
+    # Set average and error of jk
+    jkav.set_data(avg, std, error_field=error_field)
+
+    # Set UVPSpec attrs
+    for i, uvp in enumerate(jkav._uvp_list):
+        uvp.integration_array[0] = integrations[i][None]
+        uvp.time_avg_array[0] = times[i][None]
+        uvp.time_1_array[0] = times[i][None]
+        uvp.time_2_array[0] = times[i][None]
+        uvp.nsample_array[0] = nsamp[i][None]
+        uvp.labels = np.array(["Weighted Sum"])
+
+    return jkav
+
+
+def weightedsum(jkset, axis=0, error_field='bs_std'):
+    return weighted_average(jkset, axis, error_field)
+
+
+def zscores(jkset, z_method="weightedsum", axis=0, error_field='bs_std'):
+    """
+    Calculates the z scores for a JKSet along a specified axis. This
+    returns another JKSet object, which has the zscore data and errors
+    equal to 0.
+
+    Parameters
+    ----------
+    jkset: hera_stats.jkset.JKSet
+        The jackknife set to use for calculating zscores.
+
+    z_method: string, optional
+        Method used to calculate z-scores. 
+        Options: ["varsum", "weightedsum"]. Default: varsum.
         
-        # Try to load UVData from file
-        if isinstance(_uvd, str):
-            uvd = UVData()
-            if file_type == "uvh5":
-                # Do partial load
-                if isinstance(bl, (int, np.int)):
-                    raise TypeError("Baseline 'bl' must be specified as an "
-                                    "antenna pair to use the partial load "
-                                    "feature.")
-                uvd.read_uvh5(_uvd, bls=[bl,], polarizations=[pol,])
-            else:
-                # Load the whole file!
-                uvd.read(_uvd, file_type=file_type)
-        elif isinstance(_uvd, UVData):
-            # Already loaded into UVData object
-            uvd = _uvd
-        else:
-            raise TypeError("uvd_list must contain either filename strings or "
-                            "UVData objects")
+        "varsum" works only with two
+        jackknife groups, and the standard deviation is calculated by:
+        
+        zscore = (x1 - x2) / sqrt(err1**2 + err2**2)
+        
+        "weightedsum" works for any number of spectra and
+        calculates the weighted mean with stats.weightedsum, then
+        calculates zscores like this:
+        
+        zscore = (x1 - avg) / avg_err
+
+    Returns
+    -------
+    zs: list
+        Returns zscores for every spectrum pair given.
+    """
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+
+    if isinstance(axis, int): axis = (axis, )
+    assert all([ax < jkset.ndim for ax in axis]), "Axes %s was specified butn jkset has only axes <= %i." % (axis, jkset.ndim - 1)
+
+    spectra = jkset.spectra
+    errs = jkset.errs
+
+    jkout = copy.deepcopy(jkset)
+
+    spectra = jkset.spectra
+    errs = jkset.errs
     
-        # Construct key to access data
-        if isinstance(bl, (int, np.int)):
-            bl = uvd.baseline_to_antnums(bl)
-        key = (bl[0], bl[1], pol)
-    
-        # Get requested data
-        if mode == 'data':
-            arr_list.append(op(uvd.get_data(key)))
-        elif mode == 'flags':
-            arr_list.append(uvd.get_flags(key))
-        elif mode == 'nsamples':
-            arr_list.append(uvd.get_nsamples(key))
-        else:
-            raise ValueError("mode '%s' not recognized." % mode)
-    
-    # Stack arrays into one big array
-    data = utils.stacked_array(arr_list)
-    
-    # Set up the figure and grid
-    fig = plt.figure()
-    grid = gridspec.GridSpec(ncols=10, nrows=15)
-    
-    # Create main components of figure
-    main_waterfall = fig.add_subplot(grid[0:14, 1:8])
-    freq_histogram = fig.add_subplot(grid[14:15, 1:8], sharex=main_waterfall)
-    time_histogram = fig.add_subplot(grid[0:14, 8:10], sharey=main_waterfall)
-    
-    # Set sizes
-    fig.set_size_inches(figsize)
-    fig.suptitle(title, fontsize=30, y=0.975) #, horizontalalignment='center')
-    grid.tight_layout(fig)
-    counter = data.shape[0] // 60
-    
-    # Waterfall plot
-    main_waterfall.imshow(data, aspect='auto', cmap=cmap, 
-                          interpolation='none')
-    main_waterfall.set_ylabel('Integration Number')
-    main_waterfall.set_yticks(np.arange(0, counter*60 + 1, 30))
-    main_waterfall.set_ylim(60*(counter+1), 0)
-    
-    # Red lines separating files
-    for i in range(counter+1):
-        main_waterfall.plot(np.arange(data.shape[1]),
-                            60*i*np.ones(data.shape[1]), '-r')
-    for i in range(len(starting_lst)):
-        if not isinstance(starting_lst[i], str):
-            raise TypeError("starting_lst must be a list of strings")
-    
-    # Add text of filenames
-    if len(starting_lst) > 0:
-        for i in range(counter):
-            short_name = 'first\nintegration LST:\n'+starting_lst[i]
-            plt.text(-20, 26 + i*60, short_name, rotation=-90, size='small',
-                     horizontalalignment='center')
-    main_waterfall.set_xlim(0, data.shape[1])
-    
-    # Frequency sum plot
-    counts_freq = np.sum(data, axis=0)
-    max_counts_freq = max(np.amax(counts_freq), data.shape[0])
-    normalized_freq = 100 * counts_freq/max_counts_freq
-    freq_histogram.set_xticks(np.arange(0, data.shape[1], 50))
-    freq_histogram.set_yticks(np.arange(0, 101, 5))
-    freq_histogram.set_xlabel('Channel Number (Frequency)')
-    freq_histogram.set_ylabel('Occupancy %')
-    freq_histogram.grid()
-    freq_histogram.plot(np.arange(0, data.shape[1]), normalized_freq, 'r-')
-    
-    # Time sum plot
-    counts_times = np.sum(data, axis=1)
-    max_counts_times = max(np.amax(counts_times), data.shape[1])
-    normalized_times = 100 * counts_times/max_counts_times
-    time_histogram.plot(normalized_times, np.arange(data.shape[0]), 'k-',
-                        label='all channels')
-    time_histogram.set_xticks(np.arange(0, 101, 10))
-    time_histogram.set_xlabel('Flag %')
-    time_histogram.autoscale(False)
-    time_histogram.grid()
-    
-    # Returning the axes
-    return main_waterfall, freq_histogram, time_histogram, data
-    
+    jkout = copy.deepcopy(jkset)
+
+    # Or Calculate z scores with weighted sum
+    if z_method == "weightedsum":
+        # Calculate weighted average and standard deviation.
+        aerrs = 1. / np.sum(errs ** -2, axis=axis)
+        av = aerrs * np.sum(spectra * errs**-2, axis=axis)
+        N = [spectra.shape[ax] for ax in axis]
+        std = np.sqrt(aerrs * reduce(lambda x,y: x*y, N))
+        if len(axis) == 1:
+            av = np.expand_dims(av, axis[0])
+            std = np.expand_dims(std, axis[0])
+
+        z = (spectra - av)/(std)
+        jkout.set_data(z, 0*z, error_field=error_field)
+
+    # Calculate z scores using sum of variances
+    elif z_method == "varsum":
+        assert len(axis) == 1, "Varsum can only work over one axis."
+        assert jkout.shape[axis[0]] == 2, "Varsum can only take axes of length 2, got {}.".format(jkout.shape[axis[0]])
+
+        # Make keys for 2 datasets, slicing into 2 groups along specified axes
+        key1 = [slice(None, None, 1)] * jkout.ndim
+        key1[axis[0]] = 0
+        key2 = copy.deepcopy(key1)
+        key2[axis[0]] = 1
+        key1 = tuple(key1); key2 = tuple(key2)
+
+        # Calculate combined error and sum of zscores
+        comberr = np.sqrt(errs[key1]**2 + errs[key2]**2).clip(10**-10, np.inf)
+        z = ((spectra[key1] - spectra[key2])/comberr)
+
+        # Use weightedsum to shrink jkset to size, then replace data
+        jkout = weightedsum(jkout, axis=axis, error_field=error_field)
+        print(jkout.shape, z.shape)
+        jkout.set_data(z, 0*z, error_field=error_field)
+    else:
+        raise NameError("Z-score calculation method not recognized")
+
+    if axis == 1:
+        jkout = jkout.T()
+
+    jkout.jktype = "zscore_%s" % z_method
+    return jkout
+
+
+def kstest(jkset, summary=False, cdf=None, verbose=False):
+    """
+    Does a kstest on spectra in jkset. The input jkset must have shape[0] == 1,
+    As the kstest is run by delay bin along the 1st axis. Indexing by row or column
+    of jkset will do the trick.
+
+    The KS test is a test of normality, in this case, for a gaussian (avg,
+    stdev) as specified by the parameter norm. If the p-value is below the
+    KS stat, the null hypothesis (gaussian curve (0, 1)) is rejected.
+
+    Parameters
+    ----------
+    jkset: hera_stats.jkset.JKSet, ndim=1
+        The jackknife set to use for running the ks test.
+
+    summary: boolean, optional
+        If true, returns the overall failure rate. Otherwise, returns
+        the ks and p-value spectra.
+
+    cdf: function, optional
+        If a test is needed against a cumulative distribution function that
+        is not a (0, 1) gaussian, then a different cdf can be supplied as a
+        scipy stats function. If None, automatically chooses
+        scipy.stats.norm(0, 1).cdf. Default: None.
+
+    verbose: boolean, optional
+        If true, prints information for every delay mode instead of
+        summary. Default: False
+
+    Returns
+    -------
+    ks: ndarray
+        If summary == False, returns all of the ks values as a spectrum over delay modes.
+
+    pval: ndarray
+        If summary == False, returns all of the p values as a spectrum over delay modes.
+
+    failfrac: float
+        The fraction of delay modes that fail the KS test, if summary == True.
+    """
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert jkset.ndim == 1, "Input jkset must have 1 dimension."
+
+    if cdf == None:
+        cdf = spstats.norm(0, 1).cdf
+
+    spectra = jkset.spectra
+
+    ks_l, pval_l = [], []
+    fails = 0.
+    for i, col in enumerate(spectra.T):
+        [ks, pval] = spstats.kstest(col, cdf)
+        # Save result
+        ks_l += [ks]
+        pval_l += [pval]
+        isfailed = int(pval < ks)
+        fails += isfailed
+
+        if verbose:
+            st = ["pass", "fail"][isfailed]
+            print("%.1f, %s" % (jkset.dlys[i], st))
+
+    # Return proper data
+    if summary == False:
+        return np.array(ks_l), np.array(pval_l)
+    else:
+        failfrac = fails/len(jkset.dlys)
+        return failfrac
+
+
+def anderson(jkset, summary=False, verbose=False):
+    """
+    Does an Anderson-Darling test on the z-scores of the data. Prints
+    results.
+
+    One would expect the fraction of times the null hypothesis is rejected
+    to be roughly the same as the confidence level if the distribution is
+    normal, so the observed failure rates should match their respective
+    confidence levels.
+
+    Parameters
+    ----------
+    jkset: hera_stats.jkset.JKSet, ndim=1
+        The jackknife set to use for running the anderson darling test.
+
+    summary: boolean, optional
+        If true, returns only the confidence intervals and the failure rates.
+        Otherwise, returns them for every delay mode. Default: False.
+
+    verbose: boolean, optional
+        If true, prints out values neatly as well as returning them. Default: False.
+
+    Returns
+    -------
+    sigs: list
+        Significance levels for the anderson darling test. Returned if summary == True.
+
+    fracs: list
+        Fraction of anderson darling failures for each significance level.
+        Returned if summary == True.
+
+    stat_l: ndarray
+        The Anderson statistic, as a spectrum with a value for every delay mode in jkset.
+        Returned if summary == False.
+
+    crit_l: ndarray
+        The critical values, also returned as a spectrum that can be immediately plotted.
+    """
+    assert isinstance(jkset, jkset_lib.JKSet), "Expected jkset to be hera_stats.jkset.JKSet instance."
+    assert jkset.ndim == 1, "Input jkset must have first dimension 1."
+
+    spectra = jkset.spectra
+
+    # Calculate Anderson statistic and critical values for each delay mode
+    stat_l = []
+    for i, col in enumerate(np.array(spectra).T):
+        stat, crit, sig = spstats.anderson(col.flatten(), dist="norm")
+        stat_l += [stat]
+
+    if verbose:
+        print("Samples: %i" % len(stat_l))
+
+    # Print and save failure rates for each significance level
+    fracs = []
+    for i in range(5):
+        frac = float(sum(np.array(stat_l) >= crit[i]))/len(stat_l) * 100
+        if verbose:
+            print("Significance level: %.1f \tObserved "
+                  "Failure Rate: %.1f" % (sig[i], frac))
+        fracs += [frac]
+
+    # Return if specified
+    if summary == False:
+        return np.array(stat_l), np.array([list(crit)]*len(stat_l))
+    else:
+        return list(sig), fracs

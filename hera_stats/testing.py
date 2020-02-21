@@ -55,10 +55,11 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
     if jack_psc_name is not None:
         # make jacknives
         jacks = hp.PSpecContainer(jack_psc_name, mode="rw")
-
+        
+        """
         # split ants
         np.random.seed(5)
-        uvpl = hs.jackknives.split_ants(uvp1, n_jacks=5, minlen=1, verbose=False)
+        uvpl = hs.split.split_ants(uvp1, n_jacks=5, minlen=1, verbose=False)
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
                 uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
@@ -66,10 +67,11 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
                                                                       robust_std=False,
                                                                       blpair_groups=[uvp.get_blpairs()])
                 jacks.set_pspec("jackknives", "spl_ants.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
-
+        """
+        
         # split gha
         np.random.seed(5)
-        uvpl = hs.jackknives.split_gha(uvp1, [3, 2, 3,])
+        uvpl = hs.split.hour_angle(uvp1, [3, 2, 3,])
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
                 uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
@@ -78,10 +80,11 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
                                                                       blpair_groups=[uvp.get_blpairs()])
 
                 jacks.set_pspec("jackknives", "spl_gha.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
-
+        
+        """
         # stripe times
         np.random.seed(5)
-        uvpl = hs.jackknives.stripe_times(uvp1)
+        uvpl = hs.split.stripe_times(uvp1)
         for i, uvps in enumerate(uvpl):
             for j, uvp in enumerate(uvps):
                 uvp_avg, _, _ = hp.grouping.bootstrap_resampled_error(uvp, time_avg=True, Nsamples=50,
@@ -90,4 +93,5 @@ def make_uvp_data(uvp_psc_name=None, jack_psc_name=None, overwrite=False):
                                                                       blpair_groups=[uvp.get_blpairs()])
 
                 jacks.set_pspec("jackknives", "stripe_times.{}.{}".format(i, j), uvp_avg, overwrite=overwrite)
+        """
 

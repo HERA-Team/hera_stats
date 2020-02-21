@@ -15,6 +15,7 @@ dependencies:
   - scipy
   - jupyter
   - six
+  - coveralls
   - pyuvdata
   - pip:
     - git+https://github.com/HERA-Team/linsolve

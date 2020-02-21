@@ -68,9 +68,10 @@ with examples of how to use various features of `hera_stats`.
 `hera_stats` currently has the following modules:
 
 * `automate`: Functions to replace placeholder variables in template Jupyter notebooks (`jupyter_replace_tags`) and run them programmatically (`jupyter_run_notebook`).
-* `average`: More advanced averaging functions for power spectra, currently only cumulative averaging in time or baseline-pair (`average_spectra_cumul`).
-* `flag`: Advanced flagging algorithms and utilities, including a way to randomly flag frequency channels (`apply_random_flags`), a convenience function to flag whole ranges of channels at once (`flag_channels`), and an implementation of a 'greedy' flagging algorithm (`construct_factorizable_mask`) that can construct factorizable (in time and frequency) masks that flag as small a total fraction of the data as possible.
+* `average`: More advanced averaging functions for power spectra, currently only cumulative averaging in time or baseline-pair (`average_spectra_cumul`) and differencing redundant groups with respect to their average (`redundant_diff`).
+* `flag`: Flagging algorithms and utilities, including a way to randomly flag frequency channels (`apply_random_flags`), a convenience function to flag whole ranges of channels at once (`flag_channels`), and an implementation of a 'greedy' flagging algorithm (`construct_factorizable_mask`) that can construct factorizable (in time and frequency) masks that flag as small a total fraction of the data as possible.
 * `noise`: Simple empirical noise estimation functions, including a function (`estimate_noise_rms`) to estimate the noise rms by differencing data in the time direction and fit a smooth polynomial model that interpolates over flagged channels.
-* `plots`: A wide variety of diagnostic plotting functions. These include a function to generate long waterfalls plots of `nsamples` or `flags` across many files (`long_waterfall`), including summary statistics on the flag fraction for each time/frequency bin.
+* `plot`: A wide variety of diagnostic plotting functions. These include a function to generate long waterfalls plots of `nsamples` or `flags` across many files (`long_waterfall`), including summary statistics on the flag fraction for each time/frequency bin.
 * `shuffle`: Functions to randomly shuffle data. This includes a function to construct new visibilities by shuffling samples from a set of visibilities within the same redundant baseline group (`shuffle_data_redgrp`).
-* `stats`: Various statistical convenience functions to compared jackknife power spectra.
+* `split`: A range of convenience functions for splitting data in various ways.
+* `stats`: Various statistical convenience functions to compare jackknife power spectra.
