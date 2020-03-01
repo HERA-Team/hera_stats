@@ -205,12 +205,14 @@ def scatter_bandpowers(uvp, x_dly, y_dly, keys, operator='abs', label=None,
     Example of `keys` argument:
     .. highlight:: python
     .. code-block:: python
-        red_grps, red_lens, red_angs = uvp.get_red_blpairs()
-        keys = {
-            'spws':     0,
-            'blpairs':  red_grps[0],
-            'polpairs': uvp.get_polpairs(),
-        }
+       
+       red_grps, red_lens, red_angs = uvp.get_red_blpairs()
+       keys = {
+       'spws': 0,
+       'blpairs':  red_grps[0],
+       'polpairs': uvp.get_polpairs(),
+       }
+    
     
     Parameters
     ----------
