@@ -18,15 +18,15 @@ def shuffle_data_redgrp(uvd, redgrps):
     Example:
       Original visibility (fixed time and pol, for freq. channels 1, 2, 3...):
       
-        bl_a = |a1|a2|a3|a4|...
-        bl_b = |b1|b2|b3|b4|...
-        bl_c = |c1|c2|c3|c4|...
+        bl_a = [a1, a2, a3, a4, ...]
+        bl_b = [b1, b2, b3, b4, ...]
+        bl_c = [c1, c2, c3, c4, ...]
     
-      Shuffled visibility:
+      Shuffled visibility (for example):
       
-        new_a = |b1|a2|c3|b4|...
-        new_b = |c1|c2|a3|a4|...
-        new_c = |a1|b2|b3|c4|...
+        new_a = [b1, a2, c3, b4, ...]
+        new_b = [c1, c2, a3, a4, ...]
+        new_c = [a1, b2, b3, c4, ...]
     
     Parameters
     ----------
