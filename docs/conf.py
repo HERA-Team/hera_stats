@@ -29,9 +29,10 @@ import unittest.mock as mock
 MOCK_MODULES = ['numpy', 'scipy', 'scipy.interpolate', 'scipy.integrate', 
                 'pyuvdata', 'uvtools', 'astropy', 'astropy.cosmology', 
                 'astropy.units', 'astropy.constants', 'astropy.coordinates', 
-                'astropy', 'matplotlib', 'matplotlib.pyplot', 'pylab', 'yaml', 
-                'pyuvdata.utils', 'hera_pspec', 'hera_pspec.container' ]
-                
+                'astropy', 'matplotlib', 'matplotlib.pyplot', 'matplotlib.ticker', 
+                'pylab', 'yaml', 'pyuvdata.utils', 'hera_pspec', 
+                'hera_pspec.container' ]
+
 for mod_name in MOCK_MODULES:
     if mod_name == 'numpy':
         sys.modules[mod_name] = mock.Mock()
