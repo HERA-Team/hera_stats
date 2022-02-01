@@ -23,17 +23,17 @@ class bandpower():
             bp_draws: An array of draws from a gaussian with parameters
                 described by the class parameters
         """
-        if not isintance(num_draw, int):
+        if not isinstance(num_draw, int):
             print("Casting num_draw parameter as an integer")
             num_samp = int(num_draw)
 
-        if not isintance(num_pow, int):
+        if not isinstance(num_pow, int):
             print("Casting num_pow parameter as an integer")
             num_pow = int(num_pow)
 
         self.num_pow = num_pow
         self.num_draw = num_draw
-        self.dat_shape = (num_pow, num_samp)
+        self.dat_shape = (num_pow, num_draw)
 
         self.mean = mean
         self.std = std
@@ -47,7 +47,7 @@ class bandpower():
 class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
-                 bias_prior_mean=0, bias_prior_std=10, p_bad=0.5):
+                 bias_prior_mean=0, bias_prior_std=10, p_bad=0.5, analytic=True):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -60,6 +60,7 @@ class bias_jackknife():
             bias_prior_mean: Mean parameter for bias prior
             bias_prior_std: Standard deviation for bias prior
             p_bad: Prior probability of an epoch with at least one biased draw
+            analytic: Whether to use analytic result for likelihood computation
         """
 
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
@@ -71,12 +72,13 @@ class bias_jackknife():
             raise ValueError("p_bad keyword must lie strictly between 0 and 1 (boundaries excluded).")
 
         self.bp_obj = bp_obj
+        self.analytic = analytic
 
         self.like = self.get_like()
         self.evid = self.get_evidence()
         self.post = self.get_post()
 
-    def get_like(self, analytic=True):
+    def get_like(self):
         """
         Get the likelihoods for each of the null hypotheses.
 
@@ -85,12 +87,12 @@ class bias_jackknife():
                 quadrature integration methods are used.
         """
 
-        like = np.zeros(2)
+        like = np.zeros([2, self.bp_obj.num_draw])
         for null_cond in [0, 1]:
-            if analytic:
+            if self.analytic:
                 like[null_cond] = self._get_like_analytic(null_cond)
             else:
-                like = self._get_like_num(null_cond)
+                like[null_cond] = self._get_like_num(null_cond)
 
         return(like)
 
@@ -110,7 +112,7 @@ class bias_jackknife():
         gauss_2_arg = 0.5 * np.var(bp, axis=0, ddof=False) / modified_var
         gauss_2_prefac = np.sqrt(2 * np.pi * modified_var) / np.sqrt(2 * np.pi * self.bp_obj.num_pow * modified_var)**self.bp_obj.num_pow
 
-        val = norm.pdf(P_tilde, loc=loc, scale=scale) * np.exp(-gauss_2_arg) * gauss_2_prefac
+        val = norm.pdf(modified_mean, loc=loc, scale=scale) * np.exp(-gauss_2_arg) * gauss_2_prefac
 
         return(val)
 
@@ -137,7 +139,7 @@ class bias_jackknife():
 
         integrand_func = self._get_integr(null_cond)
 
-        integral = quad_vec(integrand_func, -np.inf, np.inf)
+        integral = quad_vec(integrand_func, -np.inf, np.inf)[0]
 
         return(integral)
 
@@ -146,5 +148,6 @@ class bias_jackknife():
         return(evid)
 
     def get_post(self):
-        post = self.like * self.null_prior / self.evid
+        # Transpose to make shapes conform to numpy broadcasting
+        post = (self.like.T * self.null_prior).T / self.evid
         return(post)
