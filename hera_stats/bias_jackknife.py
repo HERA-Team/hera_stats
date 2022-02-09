@@ -31,9 +31,14 @@ class bandpower():
             print("Casting num_pow parameter as an integer")
             num_pow = int(num_pow)
 
+        if "__iter__" in dir(std):
+            if not isinstance(std, np.ndarray):
+                print("Casting std parameter as an array")
+                std = np.array(std)
+
         self.num_pow = num_pow
         self.num_draw = num_draw
-        self.dat_shape = (num_pow, num_draw)
+        self.dat_shape = (num_draw, num_pow)
 
         self.mean = mean
         self.std = std
@@ -96,23 +101,30 @@ class bias_jackknife():
 
         return(like)
 
+    def _get_mod_var_mean_gauss_2(self, null_cond):
+        cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
+        mod_bp = np.copy(self.bp_obj.bp_draws) - (1 - null_cond) * self.bias_prior.mean  # Subtract term if not null_cond
+        if isinstance(self.bp_obj.std, np.ndarray):
+            mod_var = 1 / np.sum(1 / cov_sum)
+            mod_mean = mod_var * np.sum(mod_bp / cov_sum, axis=1)
+            gauss_2_arg = np.sum(mod_bp**2 / cov_sum, axis=1) - mod_mean**2 / mod_var
+            gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(np.prod(2 * np.pi * cov_sum))
+        else:
+            mod_var = cov_sum / self.bp_obj.num_pow
+            mod_mean = np.mean(mod_bp, axis=1)
+            gauss_2_arg = 0.5 * np.var(bp, axis=1, ddof=False) / mod_var
+            gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(2 * np.pi * cov_sum)**self.bp_obj.num_pow
+
+        return(mod_var, mod_mean, gauss_2_arg, gauss_2_prefac)
+
     def _get_like_analytic(self, null_cond):
 
-        modified_var = self.bp_obj.std**2 / self.bp_obj.num_pow
-        loc = self.bp_prior.mean
-        bp = np.copy(self.bp_obj.bp_draws)
+        mod_var, mod_mean, gauss_2_arg, gauss_2_prefac = self._get_mod_var_mean_gauss_2(null_cond)
 
-        if not null_cond:
-            modified_var += self.bias_prior.std**2 / self.bp_obj.num_pow
-            bp = bp - self.bias_prior.mean
+        gauss_1_loc = self.bp_prior.mean
+        gauss_1_scale = np.sqrt(mod_var + self.bp_prior.std**2)
 
-        modified_mean = np.mean(bp, axis=0)
-        scale = np.sqrt(modified_var + self.bp_prior.std**2)
-
-        gauss_2_arg = 0.5 * np.var(bp, axis=0, ddof=False) / modified_var
-        gauss_2_prefac = np.sqrt(2 * np.pi * modified_var) / np.sqrt(2 * np.pi * self.bp_obj.num_pow * modified_var)**self.bp_obj.num_pow
-
-        val = norm.pdf(modified_mean, loc=loc, scale=scale) * np.exp(-gauss_2_arg) * gauss_2_prefac
+        val = norm.pdf(mod_mean, loc=gauss_1_loc, scale=gauss_1_scale) * np.exp(-gauss_2_arg) * gauss_2_prefac
 
         return(val)
 
@@ -128,7 +140,7 @@ class bias_jackknife():
         gauss_2_scale = self.bp_prior.std
 
         def integrand(x):
-            gauss_1 = np.prod(norm.pdf(x, loc=gauss_1_loc, scale=gauss_1_scale), axis=0)
+            gauss_1 = np.prod(norm.pdf(x, loc=gauss_1_loc, scale=gauss_1_scale), axis=1)
             gauss_2 = norm.pdf(x, loc=gauss_2_loc, scale=gauss_2_scale)
 
             return(gauss_1 * gauss_2)
