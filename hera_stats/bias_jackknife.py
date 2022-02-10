@@ -71,7 +71,7 @@ class bandpower():
             self.bp_draws = bp_meas_arr[np.newaxis, :]
             shape_match = self.bp_draws.shape == self.dat_shape
             if not shape_match:
-                raise ValueError("User must supply 1-dimensional input for bp_meas")
+                raise ValueError("User must supply 1-dimensional input for bp_meas of length num_pow.")
 
 
 class bias_jackknife():
