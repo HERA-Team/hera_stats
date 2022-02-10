@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import norm
 from scipy.integrate import quad_vec
 from collections import namedtuple
+import copy
 
 gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
 
@@ -76,7 +77,7 @@ class bias_jackknife():
         else:
             raise ValueError("p_bad keyword must lie strictly between 0 and 1 (boundaries excluded).")
 
-        self.bp_obj = bp_obj
+        self.bp_obj = copy.deepcopy(bp_obj)
         self.analytic = analytic
 
         self.like = self.get_like()
@@ -101,18 +102,22 @@ class bias_jackknife():
 
         return(like)
 
-    def _get_mod_var_mean_gauss_2(self, null_cond):
+    def _get_mod_var_mean_gauss_2(self, null_cond, debug=False):
         cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
         mod_bp = np.copy(self.bp_obj.bp_draws) - (1 - null_cond) * self.bias_prior.mean  # Subtract term if not null_cond
         if isinstance(self.bp_obj.std, np.ndarray):
+            if debug:
+                print("Getting params in array case.")
             mod_var = 1 / np.sum(1 / cov_sum)
             mod_mean = mod_var * np.sum(mod_bp / cov_sum, axis=1)
-            gauss_2_arg = np.sum(mod_bp**2 / cov_sum, axis=1) - mod_mean**2 / mod_var
+            gauss_2_arg = 0.5 * (np.sum(mod_bp**2 / cov_sum, axis=1) - mod_mean**2 / mod_var)
             gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(np.prod(2 * np.pi * cov_sum))
         else:
+            if debug:
+                print("Getting params in non-array case.")
             mod_var = cov_sum / self.bp_obj.num_pow
             mod_mean = np.mean(mod_bp, axis=1)
-            gauss_2_arg = 0.5 * np.var(bp, axis=1, ddof=False) / mod_var
+            gauss_2_arg = 0.5 * np.var(mod_bp, axis=1, ddof=False) / mod_var
             gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(2 * np.pi * cov_sum)**self.bp_obj.num_pow
 
         return(mod_var, mod_mean, gauss_2_arg, gauss_2_prefac)
