@@ -114,18 +114,14 @@ class bias_jackknife():
     def get_like(self):
         """
         Get the likelihoods for each of the null hypotheses.
-
-        Args:
-            analytic: Whether to use the analytic result. If False, scipy's
-                quadrature integration methods are used.
         """
 
-        like = np.zeros([2, self.bp_obj.num_draw])
-        for null_cond in [0, 1]:
+        like = np.zeros([3, self.bp_obj.num_draw])
+        for hyp_ind in [0, 1, 3]:
             if self.analytic:
-                like[null_cond] = self._get_like_analytic(null_cond)
+                like[hyp_ind] = self._get_like_analytic(hyp_ind)
             else:
-                like[null_cond] = self._get_like_num(null_cond)
+                like[hyp_ind] = self._get_like_num(hyp_ind)
 
         return(like)
 
