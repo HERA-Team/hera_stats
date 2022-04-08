@@ -4,7 +4,7 @@ from scipy.integrate import quad_vec
 from collections import namedtuple
 import copy
 
-gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
+gauss_prior = namedtuple("gauss_prior", ["mean", "std", "corr"])
 
 
 class bandpower():
@@ -77,7 +77,8 @@ class bandpower():
 class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
-                 bias_prior_mean=0, bias_prior_std=10, p_bad=0.5, analytic=True):
+                 bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
+                 hyp_prior=np.ones(3) / 3, analytic=True):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -89,17 +90,19 @@ class bias_jackknife():
             bp_prior_std: Standard deviation for bandpower prior
             bias_prior_mean: Mean parameter for bias prior
             bias_prior_std: Standard deviation for bias prior
-            p_bad: Prior probability of an epoch with at least one biased draw
+            bias_prior_corr: Correlation coefficient for bias prior in correlated hypothesis
+            hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
         """
 
-        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
-        self.bias_prior = gauss_prior(bias_prior_mean, bias_prior_std)
+        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std, 0)
+        self.bias_prior = gauss_prior(bias_prior_mean, bias_prior_std,
+                                      bias_prior_corr)
 
-        if (p_bad > 0) and (p_bad < 1):
-            self.null_prior = np.array([p_bad, 1 - p_bad])
+        if not np.isclose(np.sum(hyp_prior), 1):
+            raise ValueError("hyp_prior does not sum close to 1, which will result in faulty normalization.")
         else:
-            raise ValueError("p_bad keyword must lie strictly between 0 and 1 (boundaries excluded).")
+            self.hyp_prior = hyp_prior
 
         self.bp_obj = copy.deepcopy(bp_obj)
         self.analytic = analytic
