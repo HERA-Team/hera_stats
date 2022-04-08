@@ -4,7 +4,8 @@ from scipy.integrate import quad_vec
 from collections import namedtuple
 import copy
 
-gauss_prior = namedtuple("gauss_prior", ["mean", "std", "corr"])
+gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
+multi_gauss_prior = namedtuple("multi_gauss_prior", ["mean", "cov"])
 
 
 class bandpower():
@@ -94,18 +95,20 @@ class bias_jackknife():
             hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
         """
-
-        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std, 0)
-        self.bias_prior = gauss_prior(bias_prior_mean, bias_prior_std,
-                                      bias_prior_corr)
+        self.bp_obj = copy.deepcopy(bp_obj)
+        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
+        bias_prior_mean, bias_prior_cov = self.get_bias_mean_cov(bias_prior_mean,
+                                                                 bias_prior_std,
+                                                                 bias_prior_corr)
+        self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
 
         if not np.isclose(np.sum(hyp_prior), 1):
-            raise ValueError("hyp_prior does not sum close to 1, which will result in faulty normalization.")
+            raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
         else:
             self.hyp_prior = hyp_prior
 
-        self.bp_obj = copy.deepcopy(bp_obj)
         self.analytic = analytic
+        self.noise_cov = self._get_noise_cov()
 
         self.like = self.get_like()
         self.evid = self.get_evidence()
@@ -125,7 +128,33 @@ class bias_jackknife():
 
         return(like)
 
-    def _get_mod_var_mean_gauss_2(self, null_cond, debug=False):
+    def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
+
+        bias_mean = np.zeros(3, self.bp_obj.num_pow)
+        bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
+        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], 2, axis=0)
+
+        bias_cov_shape = [3, self.bp_obj.num_pow, self.bp_obj.num_pow]
+        bias_cov = np.zeros(bias_cov_shape)
+
+        vars = np.repeat(bias_prior_std**2, self.bp_obj.num_pow)
+        bias_cov[1] = np.diag(vars)
+
+        off_diags = bias_prior_corr * vars
+        bias_cov[2] = off_diags * np.ones(bias_cov_shape) + (1 - bias_prior_corr) * bias_cov[1]
+
+        return(bias_mean, bias_cov)
+
+    def _get_noise_cov(self):
+        # Assuming a scalar
+        noise_cov = np.diag(np.repeat(self.bp_obj.std**2, self.bp_obj.num_pow))
+        return(noise_cov)
+
+    def _get_mod_var_mean_gauss_2(self, hyp_ind, debug=False):
+        bias_cov = self._get_bias_cov(hyp_ind)
+        # Assuming mean is a scalar
+        bias_mean = np.repeat(self.bias_prior_mean, self.bp_obj.num_pow)
+        cov_sum = self.noise_cov + self.bias_cov[hyp_ind]
         cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
         mod_bp = np.copy(self.bp_obj.bp_draws) - (1 - null_cond) * self.bias_prior.mean  # Subtract term if not null_cond
         if isinstance(self.bp_obj.std, np.ndarray):
