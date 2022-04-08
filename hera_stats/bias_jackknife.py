@@ -145,9 +145,9 @@ class bias_jackknife():
 
         return(mod_var, mod_mean, gauss_2_arg, gauss_2_prefac)
 
-    def _get_like_analytic(self, null_cond):
+    def _get_like_analytic(self, hyp_ind):
 
-        mod_var, mod_mean, gauss_2_arg, gauss_2_prefac = self._get_mod_var_mean_gauss_2(null_cond)
+        mod_var, mod_mean, gauss_2_arg, gauss_2_prefac = self._get_mod_var_mean_gauss_2(hyp_ind)
 
         gauss_1_loc = self.bp_prior.mean
         gauss_1_scale = np.sqrt(mod_var + self.bp_prior.std**2)
