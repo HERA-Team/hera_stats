@@ -120,7 +120,7 @@ class bias_jackknife():
         """
 
         like = np.zeros([3, self.bp_obj.num_draw])
-        for hyp_ind in [0, 1, 3]:
+        for hyp_ind in range(3):
             if self.analytic:
                 like[hyp_ind] = self._get_like_analytic(hyp_ind)
             else:
