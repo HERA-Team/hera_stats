@@ -150,7 +150,7 @@ class bias_jackknife():
         noise_cov = np.diag(np.repeat(self.bp_obj.std**2, self.bp_obj.num_pow))
         return(noise_cov)
 
-    def _get_mod_var_mean_gauss_2(self, hyp_ind, debug=False):
+    def _get_mod_var_mean_cov_sum(self, hyp_ind):
         cov_sum = self.noise_cov + self.bias_prior.cov[hyp_ind]
         cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
         cov_sum_inv = np.linalg.inv(cov_sum)
@@ -161,7 +161,7 @@ class bias_jackknife():
 
     def _get_like_analytic(self, hyp_ind):
 
-        mod_var, mod_mean, cov_sum = self._get_mod_var_mean_gauss_2(hyp_ind)
+        mod_var, mod_mean, cov_sum = self._get_mod_var_mean_cov_sum(hyp_ind)
 
         gauss1 = norm.pdf(mod_mean, loc=self.bp_prior.mean,
                           scale=np.sqrt(mod_var + self.bp_prior.std**2))
@@ -174,28 +174,23 @@ class bias_jackknife():
 
         return(val)
 
-    def _get_integr(self, null_cond):
-        if null_cond:
-            gauss_1_loc = self.bp_obj.bp_draws
-            gauss_1_scale = self.bp_obj.std
-        else:
-            gauss_1_loc = self.bp_obj.bp_draws - self.bias_prior.mean
-            gauss_1_scale = np.sqrt(self.bp_obj.std**2 + self.bias_prior.std**2)
+    def _get_integr(self, hyp_ind):
 
-        gauss_2_loc = self.bp_prior.mean
-        gauss_2_scale = self.bp_prior.std
+        _, _, cov_sum = self._get_mod_var_mean_cov_sum(hyp_ind)
 
         def integrand(x):
-            gauss_1 = np.prod(norm.pdf(x, loc=gauss_1_loc, scale=gauss_1_scale), axis=1)
-            gauss_2 = norm.pdf(x, loc=gauss_2_loc, scale=gauss_2_scale)
+            gauss_1 = multivariate_normal.pdf(self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind],
+                                              mean=x * np.ones(self.bp_obj.num_pow),
+                                              cov=cov_sum)
+            gauss_2 = norm.pdf(x, loc=self.bp_prior.mean, scale=self.bp_prior.std)
 
             return(gauss_1 * gauss_2)
 
         return(integrand)
 
-    def _get_like_num(self, null_cond):
+    def _get_like_num(self, hyp_ind):
 
-        integrand_func = self._get_integr(null_cond)
+        integrand_func = self._get_integr(hyp_ind)
 
         integral = quad_vec(integrand_func, -np.inf, np.inf)[0]
 
