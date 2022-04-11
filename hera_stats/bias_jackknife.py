@@ -97,9 +97,9 @@ class bias_jackknife():
         """
         self.bp_obj = copy.deepcopy(bp_obj)
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
-        bias_prior_mean, bias_prior_cov = self.get_bias_mean_cov(bias_prior_mean,
-                                                                 bias_prior_std,
-                                                                 bias_prior_corr)
+        bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
+                                                                  bias_prior_std,
+                                                                  bias_prior_corr)
         self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
 
         if not np.isclose(np.sum(hyp_prior), 1):
@@ -130,7 +130,7 @@ class bias_jackknife():
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
 
-        bias_mean = np.zeros(3, self.bp_obj.num_pow)
+        bias_mean = np.zeros([3, self.bp_obj.num_pow])
         bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
         bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], 2, axis=0)
 
@@ -141,7 +141,7 @@ class bias_jackknife():
         bias_cov[1] = np.diag(vars)
 
         off_diags = bias_prior_corr * vars
-        bias_cov[2] = off_diags * np.ones(bias_cov_shape) + (1 - bias_prior_corr) * bias_cov[1]
+        bias_cov[2] = off_diags * np.ones(bias_cov_shape[1:]) + (1 - bias_prior_corr) * bias_cov[1]
 
         return(bias_mean, bias_cov)
 
@@ -152,10 +152,9 @@ class bias_jackknife():
 
     def _get_mod_var_mean_cov_sum(self, hyp_ind):
         cov_sum = self.noise_cov + self.bias_prior.cov[hyp_ind]
-        cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
         cov_sum_inv = np.linalg.inv(cov_sum)
         mod_var = 1 / np.sum(cov_sum_inv)
-        mod_mean = mod_var * np.sum(cov_sum_inv @ (self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]))
+        mod_mean = mod_var * np.sum(cov_sum_inv @ (self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]).T)
 
         return(mod_var, mod_mean, cov_sum)
 
@@ -169,6 +168,9 @@ class bias_jackknife():
                                          mean=self.bias_prior.mean[hyp_ind],
                                          cov=cov_sum)
         gauss3 = norm.pdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
+        print(mod_mean)
+        print(mod_var)
+        print(np.count_nonzero(gauss3 == 0))
 
         val = gauss1 * gauss2 / gauss3
 
@@ -197,10 +199,10 @@ class bias_jackknife():
         return(integral)
 
     def get_evidence(self):
-        evid = self.null_prior @ self.like
+        evid = self.hyp_prior @ self.like
         return(evid)
 
     def get_post(self):
         # Transpose to make shapes conform to numpy broadcasting
-        post = (self.like.T * self.null_prior).T / self.evid
+        post = (self.like.T * self.hyp_prior).T / self.evid
         return(post)
