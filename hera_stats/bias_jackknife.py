@@ -151,26 +151,14 @@ class bias_jackknife():
         return(noise_cov)
 
     def _get_mod_var_mean_gauss_2(self, hyp_ind, debug=False):
-        bias_cov = self._get_bias_cov(hyp_ind)
-        # Assuming mean is a scalar
-        bias_mean = np.repeat(self.bias_prior_mean, self.bp_obj.num_pow)
-        cov_sum = self.noise_cov + self.bias_cov[hyp_ind]
+        cov_sum = self.noise_cov + self.bias_prior.cov[hyp_ind]
         cov_sum = self.bp_obj.std**2 + (1 - null_cond) * self.bias_prior.std**2  # Add term if not null_cond
-        mod_bp = np.copy(self.bp_obj.bp_draws) - (1 - null_cond) * self.bias_prior.mean  # Subtract term if not null_cond
-        if isinstance(self.bp_obj.std, np.ndarray):
-            if debug:
-                print("Getting params in array case.")
-            mod_var = 1 / np.sum(1 / cov_sum)
-            mod_mean = mod_var * np.sum(mod_bp / cov_sum, axis=1)
-            gauss_2_arg = 0.5 * (np.sum(mod_bp**2 / cov_sum, axis=1) - mod_mean**2 / mod_var)
-            gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(np.prod(2 * np.pi * cov_sum))
-        else:
-            if debug:
-                print("Getting params in non-array case.")
-            mod_var = cov_sum / self.bp_obj.num_pow
-            mod_mean = np.mean(mod_bp, axis=1)
-            gauss_2_arg = 0.5 * np.var(mod_bp, axis=1, ddof=False) / mod_var
-            gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.sqrt(2 * np.pi * cov_sum)**self.bp_obj.num_pow
+        cov_sum_inv = np.linalg.inv(cov_sum)
+        mod_var = 1 / np.sum(cov_sum_inv)
+        mod_mean = mod_var * np.sum(cov_sum_inv @ (self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]))
+        gauss_2_diff = self.bp_obj.bp_draws - selb.bias_prior.mean
+        gauss_2_arg = -0.5 * (gauss_2_diff @ cov_sum_inv @ gauss_@_diff - mod_mean**2 / mod_var)
+        gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.linalg.det(2 * np.pi * cov_sum)
 
         return(mod_var, mod_mean, gauss_2_arg, gauss_2_prefac)
 
@@ -181,7 +169,7 @@ class bias_jackknife():
         gauss_1_loc = self.bp_prior.mean
         gauss_1_scale = np.sqrt(mod_var + self.bp_prior.std**2)
 
-        val = norm.pdf(mod_mean, loc=gauss_1_loc, scale=gauss_1_scale) * np.exp(-gauss_2_arg) * gauss_2_prefac
+        val = norm.pdf(mod_mean, loc=gauss_1_loc, scale=gauss_1_scale) * np.exp(gauss_2_arg) * gauss_2_prefac
 
         return(val)
 
