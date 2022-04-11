@@ -154,7 +154,7 @@ class bias_jackknife():
         cov_sum = self.noise_cov + self.bias_prior.cov[hyp_ind]
         cov_sum_inv = np.linalg.inv(cov_sum)
         mod_var = 1 / np.sum(cov_sum_inv)
-        mod_mean = mod_var * np.sum(cov_sum_inv @ (self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]).T)
+        mod_mean = mod_var * np.sum((self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]) @ cov_sum_inv, axis=1)
 
         return(mod_var, mod_mean, cov_sum)
 
@@ -168,13 +168,9 @@ class bias_jackknife():
                                          mean=self.bias_prior.mean[hyp_ind],
                                          cov=cov_sum)
         gauss3 = norm.pdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
-        print(mod_mean)
-        print(mod_var)
-        print(np.count_nonzero(gauss3 == 0))
+        like = gauss1 * gauss2 / gauss3
 
-        val = gauss1 * gauss2 / gauss3
-
-        return(val)
+        return(like)
 
     def _get_integr(self, hyp_ind):
 
