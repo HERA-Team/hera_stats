@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, multivariate_normal
 from scipy.integrate import quad_vec
 from collections import namedtuple
 import copy
@@ -156,20 +156,21 @@ class bias_jackknife():
         cov_sum_inv = np.linalg.inv(cov_sum)
         mod_var = 1 / np.sum(cov_sum_inv)
         mod_mean = mod_var * np.sum(cov_sum_inv @ (self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]))
-        gauss_2_diff = self.bp_obj.bp_draws - selb.bias_prior.mean
-        gauss_2_arg = -0.5 * (gauss_2_diff @ cov_sum_inv @ gauss_@_diff - mod_mean**2 / mod_var)
-        gauss_2_prefac = np.sqrt(2 * np.pi * mod_var) / np.linalg.det(2 * np.pi * cov_sum)
 
-        return(mod_var, mod_mean, gauss_2_arg, gauss_2_prefac)
+        return(mod_var, mod_mean, cov_sum)
 
     def _get_like_analytic(self, hyp_ind):
 
-        mod_var, mod_mean, gauss_2_arg, gauss_2_prefac = self._get_mod_var_mean_gauss_2(hyp_ind)
+        mod_var, mod_mean, cov_sum = self._get_mod_var_mean_gauss_2(hyp_ind)
 
-        gauss_1_loc = self.bp_prior.mean
-        gauss_1_scale = np.sqrt(mod_var + self.bp_prior.std**2)
+        gauss1 = norm.pdf(mod_mean, loc=self.bp_prior.mean,
+                          scale=np.sqrt(mod_var + self.bp_prior.std**2))
+        gauss2 = multivariate_normal.pdf(self.bp_obj.bp_draws,
+                                         mean=self.bias_prior.mean[hyp_ind],
+                                         cov=cov_sum)
+        gauss3 = norm.pdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
 
-        val = norm.pdf(mod_mean, loc=gauss_1_loc, scale=gauss_1_scale) * np.exp(gauss_2_arg) * gauss_2_prefac
+        val = gauss1 * gauss2 / gauss3
 
         return(val)
 
