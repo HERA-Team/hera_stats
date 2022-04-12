@@ -147,7 +147,10 @@ class bias_jackknife():
 
     def _get_noise_cov(self):
         # Assuming a scalar
-        noise_cov = np.diag(np.repeat(self.bp_obj.std**2, self.bp_obj.num_pow))
+        if hasattr(self.bp_obj.std, "__iter__"):  # Assume a vector
+            noise_cov = np.diag(self.bp_obj.std**2)
+        else:
+            noise_cov = np.diag(np.repeat(self.bp_obj.std**2, self.bp_obj.num_pow))
         return(noise_cov)
 
     def _get_mod_var_mean_cov_sum(self, hyp_ind):
