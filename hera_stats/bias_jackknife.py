@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import norm, multivariate_normal
 from scipy.integrate import quad_vec
+from scipy.special import comb
 from collections import namedtuple
 import copy
 
@@ -79,7 +80,7 @@ class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
                  bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
-                 hyp_prior=np.ones(3) / 3, analytic=True):
+                 hyp_prior=None, analytic=True):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -96,16 +97,18 @@ class bias_jackknife():
             analytic: Whether to use analytic result for likelihood computation
         """
         self.bp_obj = copy.deepcopy(bp_obj)
+        self.num_hyp = self.get_num_hyp
+        if hyp_prior is None:  # Default to flat
+            self.hyp_prior = np.ones(self.num_hyp) / self.num_hyp
+        elif not np.isclose(np.sum(hyp_prior), 1):
+            raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
+        else:
+            self.hyp_prior = hyp_prior
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
         bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
                                                                   bias_prior_std,
                                                                   bias_prior_corr)
         self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
-
-        if not np.isclose(np.sum(hyp_prior), 1):
-            raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
-        else:
-            self.hyp_prior = hyp_prior
 
         self.analytic = analytic
         self.noise_cov = self._get_noise_cov()
@@ -114,13 +117,20 @@ class bias_jackknife():
         self.evid = self.get_evidence()
         self.post = self.get_post()
 
+    def get_num_hyp(self):
+        N = self.bp_obj.num_pow  # Abbreviated variable name
+        k = np.arange(N + 1)
+        num_hyp = comb(N, k, exact=True)@(2 ** (comb(k, 2, exact=True)))
+        num_hyp = int(num_hyp)
+        return(num_hyp)
+
     def get_like(self):
         """
         Get the likelihoods for each of the null hypotheses.
         """
 
-        like = np.zeros([3, self.bp_obj.num_draw])
-        for hyp_ind in range(3):
+        like = np.zeros([self.num_hyp, self.bp_obj.num_draw])
+        for hyp_ind in range(self.num_hyp):
             if self.analytic:
                 like[hyp_ind] = self._get_like_analytic(hyp_ind)
             else:
@@ -130,11 +140,11 @@ class bias_jackknife():
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
 
-        bias_mean = np.zeros([3, self.bp_obj.num_pow])
+        bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
         bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
         bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], 2, axis=0)
 
-        bias_cov_shape = [3, self.bp_obj.num_pow, self.bp_obj.num_pow]
+        bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
 
         vars = np.repeat(bias_prior_std**2, self.bp_obj.num_pow)
