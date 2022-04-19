@@ -161,18 +161,16 @@ class bias_jackknife():
             if N_on == 0:  # Null hypothesis - all 0 cov. matrix
                 hyp_ind += 1
             else:
-                cov[hyp_ind, diag_on, diag_on] = 1
+                bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[diag_on]**2
                 if N_on == 1:
                     hyp_ind += 1
                 else:
                     off_diag_pairs = combinations(N_on, 2)
                     for pair in off_diag_pairs:
-                        cov[hyp_ind, pair[0], pair[1]] = bias_prior_corr
-                        cov[hyp_ind, pair[1], pair[0]] = bias_prior_corr
+                        off_diag_val = bias_prior_corr * bias_prior_std[pair[0]] * bias_prior_std[pair[1]]
+                        bias_cov[hyp_ind, pair[0], pair[1]] = off_diag_val
+                        bias_cov[hyp_ind, pair[1], pair[0]] = off_diag_val
                         hyp_ind += 1
-
-        vars = np.repeat(bias_prior_std**2, self.bp_obj.num_pow)
-        bias_cov = vars * bias_cov
 
         return(bias_mean, bias_cov)
 
