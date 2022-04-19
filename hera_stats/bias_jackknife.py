@@ -3,10 +3,18 @@ from scipy.stats import norm, multivariate_normal
 from scipy.integrate import quad_vec
 from scipy.special import comb
 from collections import namedtuple
+from itertools import combinations, chain
 import copy
 
 gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
 multi_gauss_prior = namedtuple("multi_gauss_prior", ["mean", "cov"])
+
+
+def powerset(iterable):  # From the "more-itertools package"
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+
+    return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
 
 
 class bandpower():
@@ -147,11 +155,24 @@ class bias_jackknife():
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
 
-        vars = np.repeat(bias_prior_std**2, self.bp_obj.num_pow)
-        bias_cov[1] = np.diag(vars)
+        hyp_ind = 0
+        for diag_on in powerset(range(self.bp_obj.num_pow)):
+            N_on = len(diag_on)
+            if N_on == 0:  # Null hypothesis - all 0 cov. matrix
+                hyp_ind += 1
+            else:
+                cov[hyp_ind, diag_on, diag_on] = 1
+                if N_on == 1:
+                    hyp_ind += 1
+                else:
+                    off_diag_pairs = combinations(N_on, 2)
+                    for pair in off_diag_pairs:
+                        cov[hyp_ind, pair[0], pair[1]] = bias_prior_corr
+                        cov[hyp_ind, pair[1], pair[0]] = bias_prior_corr
+                        hyp_ind += 1
 
-        off_diags = bias_prior_corr * vars
-        bias_cov[2] = off_diags * np.ones(bias_cov_shape[1:]) + (1 - bias_prior_corr) * bias_cov[1]
+        vars = np.repeat(bias_prior_std**2, self.bp_obj.num_pow)
+        bias_cov = vars * bias_cov
 
         return(bias_mean, bias_cov)
 
