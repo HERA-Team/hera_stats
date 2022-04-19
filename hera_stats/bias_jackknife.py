@@ -165,13 +165,14 @@ class bias_jackknife():
 
         mod_var, mod_mean, cov_sum = self._get_mod_var_mean_cov_sum(hyp_ind)
 
-        gauss1 = norm.pdf(mod_mean, loc=self.bp_prior.mean,
-                          scale=np.sqrt(mod_var + self.bp_prior.std**2))
-        gauss2 = multivariate_normal.pdf(self.bp_obj.bp_draws,
-                                         mean=self.bias_prior.mean[hyp_ind],
-                                         cov=cov_sum)
-        gauss3 = norm.pdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
-        like = gauss1 * gauss2 / gauss3
+        # Use log to avoid dividing by 0
+        gauss1 = norm.logpdf(mod_mean, loc=self.bp_prior.mean,
+                             scale=np.sqrt(mod_var + self.bp_prior.std**2))
+        gauss2 = multivariate_normal.logpdf(self.bp_obj.bp_draws,
+                                            mean=self.bias_prior.mean[hyp_ind],
+                                            cov=cov_sum)
+        gauss3 = norm.logpdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
+        like = np.exp(gauss1 + gauss2 - gauss3)
 
         return(like)
 
