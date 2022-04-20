@@ -105,17 +105,17 @@ class bias_jackknife():
             analytic: Whether to use analytic result for likelihood computation
         """
         self.bp_obj = copy.deepcopy(bp_obj)
-        self.num_hyp = self.get_num_hyp
+        self.num_hyp = self.get_num_hyp()
+        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
+        bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
+                                                                  bias_prior_std,
+                                                                  bias_prior_corr)
         if hyp_prior is None:  # Default to flat
             self.hyp_prior = np.ones(self.num_hyp) / self.num_hyp
         elif not np.isclose(np.sum(hyp_prior), 1):
             raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
         else:
             self.hyp_prior = hyp_prior
-        self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
-        bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
-                                                                  bias_prior_std,
-                                                                  bias_prior_corr)
         self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
 
         self.analytic = analytic
@@ -128,9 +128,9 @@ class bias_jackknife():
     def get_num_hyp(self):
         N = self.bp_obj.num_pow  # Abbreviated variable name
         k = np.arange(N + 1)
-        num_hyp = comb(N, k, exact=True)@(2 ** (comb(k, 2, exact=True)))
-        num_hyp = int(num_hyp)
-        return(num_hyp)
+        num_hyp = comb(N, k) @ (2**(comb(k, 2)))
+        print(f"num_hyp:{num_hyp}")
+        return(int(num_hyp))
 
     def get_like(self):
         """
@@ -150,27 +150,41 @@ class bias_jackknife():
 
         bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
         bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
-        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], 2, axis=0)
+        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], self.num_hyp - 1,
+                                  axis=0)
 
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
+        if "__iter__" not in dir(bias_prior_std):
+            bias_prior_std = np.repeat(bias_prior_std, self.bp_obj.num_pow)
 
+        ###
+        # The matrices need to be transitive - this should be all of them. #
+        ###
         hyp_ind = 0
         for diag_on in powerset(range(self.bp_obj.num_pow)):
             N_on = len(diag_on)
             if N_on == 0:  # Null hypothesis - all 0 cov. matrix
                 hyp_ind += 1
+            elif N_on == 1:
+                bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
+                hyp_ind += 1
             else:
-                bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[diag_on]**2
-                if N_on == 1:
-                    hyp_ind += 1
-                else:
-                    off_diag_pairs = combinations(N_on, 2)
-                    for pair in off_diag_pairs:
-                        off_diag_val = bias_prior_corr * bias_prior_std[pair[0]] * bias_prior_std[pair[1]]
-                        bias_cov[hyp_ind, pair[0], pair[1]] = off_diag_val
-                        bias_cov[hyp_ind, pair[1], pair[0]] = off_diag_val
-                        hyp_ind += 1
+                for k in range(2, N_on + 1):
+                    diag_combos = combinations(diag_on, k)
+                    for combo in diag_combos:
+                        all_pairs = combinations(combo, 2)
+                        for corr_on_off in range(2):
+                            bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
+                            for pair in all_pairs:
+                                off_diag = bias_prior_std[pair[0]] * bias_prior_std[pair[1]] * bias_prior_corr
+                                bias_cov[hyp_ind, pair[0], pair[1]] = off_diag
+                                bias_cov[hyp_ind, pair[1], pair[0]] = off_diag
+                            hyp_ind += 1
+        print(f"hyp_ind: {hyp_ind}")
+        bias_cov = np.unique(bias_cov, axis=0)
+        self.num_hyp = len(bias_cov)
+        print(f"num_hyp: {self.num_hyp}")
 
         return(bias_mean, bias_cov)
 
@@ -197,9 +211,14 @@ class bias_jackknife():
         # Use log to avoid dividing by 0
         gauss1 = norm.logpdf(mod_mean, loc=self.bp_prior.mean,
                              scale=np.sqrt(mod_var + self.bp_prior.std**2))
-        gauss2 = multivariate_normal.logpdf(self.bp_obj.bp_draws,
-                                            mean=self.bias_prior.mean[hyp_ind],
-                                            cov=cov_sum)
+        try:
+            gauss2 = multivariate_normal.logpdf(self.bp_obj.bp_draws,
+                                                mean=self.bias_prior.mean[hyp_ind],
+                                                cov=cov_sum)
+        except ValueError:
+            print(self.bias_prior.cov[hyp_ind])
+            print(cov_sum)
+            raise ValueError("Bad matrix. Clues printed out.")
         gauss3 = norm.logpdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
         like = np.exp(gauss1 + gauss2 - gauss3)
 
