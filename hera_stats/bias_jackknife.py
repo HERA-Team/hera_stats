@@ -4,18 +4,12 @@ from scipy.integrate import quad_vec
 from scipy.special import comb
 from collections import namedtuple
 from itertools import combinations, chain
+from more_itertools import set_partitions
+from more_itertools.recipes import powerset
 import copy
 
 gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
 multi_gauss_prior = namedtuple("multi_gauss_prior", ["mean", "cov"])
-
-
-def powerset(iterable):  # From the "more-itertools package"
-    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-    s = list(iterable)
-
-    return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
-
 
 class bandpower():
 
@@ -105,13 +99,13 @@ class bias_jackknife():
             analytic: Whether to use analytic result for likelihood computation
         """
         self.bp_obj = copy.deepcopy(bp_obj)
-        self.num_hyp = self.get_num_hyp()
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
+        self.num_hyp = self.get_num_hyp()
         bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
                                                                   bias_prior_std,
                                                                   bias_prior_corr)
         if hyp_prior is None:  # Default to flat
-            self.hyp_prior = np.ones(self.num_hyp) / self.num_hyp
+            self.hyp_prior = self._get_default_prior()
         elif not np.isclose(np.sum(hyp_prior), 1):
             raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
         else:
@@ -125,12 +119,25 @@ class bias_jackknife():
         self.evid = self.get_evidence()
         self.post = self.get_post()
 
+    def _get_default_prior(self):
+        hyp_prior = np.zeros(self.num_hyp)
+        hyp_prior[0] = 0.5
+        hyp_prior[1:] = 0.5 / (self.num_hyp - 1)
+        return(hyp_prior)
+
     def get_num_hyp(self):
-        N = self.bp_obj.num_pow  # Abbreviated variable name
-        k = np.arange(N + 1)
-        num_hyp = comb(N, k) @ (2**(comb(k, 2)))
-        print(f"num_hyp:{num_hyp}")
-        return(int(num_hyp))
+        """
+        Fun fact: these are called bell numbers. For N bandpowers, we actually
+        want the N+1th bell number, which is the total number of ways of
+        partitioning a set with N+1 elements.
+        """
+        M = self.bp_obj.num_pow + 1
+        B = np.zeros(M + 1, dtype=int)
+        B[0] = 1  # NEED THE SEED
+        for n in range(M):
+            for k in range(n + 1):
+                B[n + 1] += comb(n, k, exact=True) * B[k]
+        return(B[M])
 
     def get_like(self):
         """
@@ -148,11 +155,6 @@ class bias_jackknife():
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
 
-        bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
-        bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
-        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], self.num_hyp - 1,
-                                  axis=0)
-
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
         if "__iter__" not in dir(bias_prior_std):
@@ -166,25 +168,22 @@ class bias_jackknife():
             N_on = len(diag_on)
             if N_on == 0:  # Null hypothesis - all 0 cov. matrix
                 hyp_ind += 1
-            elif N_on == 1:
-                bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
-                hyp_ind += 1
             else:
-                for k in range(2, N_on + 1):
-                    diag_combos = combinations(diag_on, k)
-                    for combo in diag_combos:
-                        all_pairs = combinations(combo, 2)
-                        for corr_on_off in range(2):
-                            bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
-                            for pair in all_pairs:
-                                off_diag = bias_prior_std[pair[0]] * bias_prior_std[pair[1]] * bias_prior_corr
-                                bias_cov[hyp_ind, pair[0], pair[1]] = off_diag
-                                bias_cov[hyp_ind, pair[1], pair[0]] = off_diag
-                            hyp_ind += 1
-        print(f"hyp_ind: {hyp_ind}")
-        bias_cov = np.unique(bias_cov, axis=0)
-        self.num_hyp = len(bias_cov)
-        print(f"num_hyp: {self.num_hyp}")
+                parts = set_partitions(diag_on)  # Set of partitionings
+                for part in parts:  # Loop over partitionings
+                    bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
+                    for sub_part in part:  # Loop over compartments to correlate them
+                        off_diags = combinations(sub_part, 2)  # Get off-diagonal indices for this compartment
+                        for pair in off_diags:  # Fill off-diagonal indices for this compartment
+                            off_diag = bias_prior_std[pair[0]] * bias_prior_std[pair[1]] * bias_prior_corr
+                            bias_cov[hyp_ind, pair[0], pair[1]] = off_diag
+                            bias_cov[hyp_ind, pair[1], pair[0]] = off_diag
+                    hyp_ind += 1
+
+        bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
+        bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
+        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], self.num_hyp - 1,
+                                  axis=0)
 
         return(bias_mean, bias_cov)
 
