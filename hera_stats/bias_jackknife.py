@@ -112,6 +112,8 @@ class bias_jackknife():
             self.hyp_prior = self._get_default_prior()
         elif not np.isclose(np.sum(hyp_prior), 1):
             raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
+        elif len(self.hyp_prior) != self.num_hyp:
+            raise ValueError("hyp_prior length does not match hypothesis set length. Check mode keyword.")
         else:
             self.hyp_prior = hyp_prior
         self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
