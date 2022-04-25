@@ -82,7 +82,7 @@ class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
                  bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
-                 hyp_prior=None, analytic=True):
+                 hyp_prior=None, analytic=True, mode='full'):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -98,6 +98,9 @@ class bias_jackknife():
             hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
         """
+        if mode not in ['full', 'diagonal', 'ternary', 'binary']:
+            raise ValueError("mode must be 'full', 'diagonal', 'ternary', or 'binary'")
+        self.mode = mode
         self.bp_obj = copy.deepcopy(bp_obj)
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
         self.num_hyp = self.get_num_hyp()
@@ -127,17 +130,26 @@ class bias_jackknife():
 
     def get_num_hyp(self):
         """
-        Fun fact: these are called bell numbers. For N bandpowers, we actually
-        want the N+1th bell number, which is the total number of ways of
-        partitioning a set with N+1 elements.
+        Fun fact: these are called bell numbers in the full case. For N
+        bandpowers, we actually want the N+1th bell number, which is the total
+        number of ways of partitioning a set with N+1 elements.
         """
-        M = self.bp_obj.num_pow + 1
-        B = np.zeros(M + 1, dtype=int)
-        B[0] = 1  # NEED THE SEED
-        for n in range(M):
-            for k in range(n + 1):
-                B[n + 1] += comb(n, k, exact=True) * B[k]
-        return(B[M])
+        if self.mode == 'full':
+            M = self.bp_obj.num_pow + 1
+            B = np.zeros(M + 1, dtype=int)
+            B[0] = 1  # NEED THE SEED
+            for n in range(M):
+                for k in range(n + 1):
+                    B[n + 1] += comb(n, k, exact=True) * B[k]
+
+            num_hyp = B[M]
+        elif self.mode == 'diagonal':
+            num_hyp = 2**(self.bp_obj.num_pow)
+        elif mode == 'ternary':
+            num_hyp = 3
+        elif mode == 'binary':
+            num_hyp = 2
+        return(num_hyp)
 
     def get_like(self):
         """
@@ -157,28 +169,36 @@ class bias_jackknife():
 
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
-        if "__iter__" not in dir(bias_prior_std):
-            bias_prior_std = np.repeat(bias_prior_std, self.bp_obj.num_pow)
 
         ###
         # The matrices need to be transitive - this should be all of them. #
         ###
+        diag_val = bias_prior_std**2
+        off_diag_val = bias_prior_corr * diag_val
         hyp_ind = 0
-        for diag_on in powerset(range(self.bp_obj.num_pow)):
-            N_on = len(diag_on)
-            if N_on == 0:  # Null hypothesis - all 0 cov. matrix
-                hyp_ind += 1
-            else:
-                parts = set_partitions(diag_on)  # Set of partitionings
-                for part in parts:  # Loop over partitionings
-                    bias_cov[hyp_ind, diag_on, diag_on] = bias_prior_std[np.array(diag_on)]**2
-                    for sub_part in part:  # Loop over compartments to correlate them
-                        off_diags = combinations(sub_part, 2)  # Get off-diagonal indices for this compartment
-                        for pair in off_diags:  # Fill off-diagonal indices for this compartment
-                            off_diag = bias_prior_std[pair[0]] * bias_prior_std[pair[1]] * bias_prior_corr
-                            bias_cov[hyp_ind, pair[0], pair[1]] = off_diag
-                            bias_cov[hyp_ind, pair[1], pair[0]] = off_diag
+        if self.mode in ["full", "diagonal"]:
+            for diag_on in powerset(range(self.bp_obj.num_pow)):
+                N_on = len(diag_on)
+                if N_on == 0:  # Null hypothesis - all 0 cov. matrix
                     hyp_ind += 1
+                elif self.mode == "full":
+                    parts = set_partitions(diag_on)  # Set of partitionings
+                    for part in parts:  # Loop over partitionings
+                        bias_cov[hyp_ind, diag_on, diag_on] = diag_val
+                        for sub_part in part:  # Loop over compartments to correlate them
+                            off_diags = combinations(sub_part, 2)  # Get off-diagonal indices for this compartment
+                            for pair in off_diags:  # Fill off-diagonal indices for this compartment
+                                bias_cov[hyp_ind, pair[0], pair[1]] = off_diag_val
+                                bias_cov[hyp_ind, pair[1], pair[0]] = off_diag_val
+                        hyp_ind += 1
+                else:  # Mode must be diagonal
+                    bias_cov[hyp_ind, diag_on, diag_on] = diag_val
+                    hyp_ind += 1
+        elif self.mode in ["ternary", "binary"]:
+            diag_inds = np.arange(self.bp_obj.num_pow)
+            bias_cov[1] = diag_val * np.eye(self.bp_obj.num_pow)
+            if self.mode == "ternary":
+                bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
 
         bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
         bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
