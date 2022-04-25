@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import norm, multivariate_normal
+from scipy.sparse import block_diag
 from scipy.integrate import quad_vec
 from scipy.special import comb
 from collections import namedtuple
@@ -273,3 +274,24 @@ class bias_jackknife():
         # Transpose to make shapes conform to numpy broadcasting
         post = (self.like.T * self.hyp_prior).T / self.evid
         return(post)
+
+    def gen_bp_mix(self, num_draw):
+        """
+        Generate a mixture of bandpower objects in accordance with the priors.
+
+        Args:
+            num_draw: How many bandpowers to simulate per hypothesis
+        """
+        bp_list = []
+        mean = np.random.normal(loc=self.bp_prior.mean, scale=self.bp_prior.std,
+                                size=[num_draw, self.num_hyp, self.bp_obj.num_pow])
+        bias = np.random.multivariate_normal(mean=self.bias_prior.mean,
+                                             cov=block_diag(self.bias_prior.cov),
+                                             size=num_draw).reshape([num_draw, self.num_hyp, self.bp_obj.num_pow])
+        std = self.bp_obj.std
+        for hyp in range(self.num_hyp):
+            bp = bandpower(mean=mean[:, hyp, :], std=std, num_draw=num_draw,
+                           bias=bias[:, hyp, :], num_pow=self.bp_obj.num_pow)
+            bp_list.append(bp)
+
+        return(bp_list)
