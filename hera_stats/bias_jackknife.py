@@ -112,7 +112,7 @@ class bias_jackknife():
             self.hyp_prior = self._get_default_prior()
         elif not np.isclose(np.sum(hyp_prior), 1):
             raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
-        elif len(self.hyp_prior) != self.num_hyp:
+        elif len(hyp_prior) != self.num_hyp:
             raise ValueError("hyp_prior length does not match hypothesis set length. Check mode keyword.")
         else:
             self.hyp_prior = hyp_prior
@@ -148,9 +148,9 @@ class bias_jackknife():
             num_hyp = B[M]
         elif self.mode == 'diagonal':
             num_hyp = 2**(self.bp_obj.num_pow)
-        elif mode == 'ternary':
+        elif self.mode == 'ternary':
             num_hyp = 3
-        elif mode == 'binary':
+        elif self.mode == 'binary':
             num_hyp = 2
         return(num_hyp)
 
