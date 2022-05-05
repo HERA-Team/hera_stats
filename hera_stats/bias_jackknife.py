@@ -3,14 +3,17 @@ from scipy.stats import norm, multivariate_normal
 from scipy.sparse import block_diag
 from scipy.integrate import quad_vec
 from scipy.special import comb
+from scipy.linalg import LinAlgError
 from collections import namedtuple
 from itertools import combinations, chain
 from more_itertools import set_partitions
 from more_itertools.recipes import powerset
 import copy
+import warnings
 
 gauss_prior = namedtuple("gauss_prior", ["mean", "std"])
 multi_gauss_prior = namedtuple("multi_gauss_prior", ["mean", "cov"])
+
 
 class bandpower():
 
@@ -99,17 +102,24 @@ class bias_jackknife():
             hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
         """
-        if mode not in ['full', 'diagonal', 'ternary', 'binary']:
-            raise ValueError("mode must be 'full', 'diagonal', 'ternary', or 'binary'")
+        if mode not in ['full', 'diagonal', 'stage2', 'stage1']:
+            raise ValueError("mode must be 'full', 'diagonal', 'stage2', or 'stage1'")
+
         self.mode = mode
         self.bp_obj = copy.deepcopy(bp_obj)
+        if bias_prior_std > 1e4 * np.amin(self.bp_obj.std):
+            warnings.warn("Bias prior is sufficiently large compared to error"
+                          " bar to produce floating point roundoff errors. The"
+                          " likelihoods may be untrustworthy and this is an "
+                          " unnecessarily wide prior.")
+
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
         self.num_hyp = self.get_num_hyp()
         bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
                                                                   bias_prior_std,
                                                                   bias_prior_corr)
         if hyp_prior is None:  # Default to flat
-            self.hyp_prior = self._get_default_prior()
+            self.hyp_prior = np.ones(self.num_hyp) / self.num_hyp
         elif not np.isclose(np.sum(hyp_prior), 1):
             raise ValueError("hyp_prior does not sum close to 1, which can result in faulty normalization.")
         elif len(hyp_prior) != self.num_hyp:
@@ -124,12 +134,6 @@ class bias_jackknife():
         self.like = self.get_like()
         self.evid = self.get_evidence()
         self.post = self.get_post()
-
-    def _get_default_prior(self):
-        hyp_prior = np.zeros(self.num_hyp)
-        hyp_prior[0] = 0.5
-        hyp_prior[1:] = 0.5 / (self.num_hyp - 1)
-        return(hyp_prior)
 
     def get_num_hyp(self):
         """
@@ -148,9 +152,7 @@ class bias_jackknife():
             num_hyp = B[M]
         elif self.mode == 'diagonal':
             num_hyp = 2**(self.bp_obj.num_pow)
-        elif self.mode == 'ternary':
-            num_hyp = 3
-        elif self.mode == 'binary':
+        elif self.mode in ['stage1', 'stage2']:
             num_hyp = 2
         return(num_hyp)
 
@@ -197,15 +199,22 @@ class bias_jackknife():
                 else:  # Mode must be diagonal
                     bias_cov[hyp_ind, diag_on, diag_on] = diag_val
                     hyp_ind += 1
-        elif self.mode in ["ternary", "binary"]:
+        elif self.mode in ["stage1", "stage2"]:
             diag_inds = np.arange(self.bp_obj.num_pow)
             bias_cov[1] = diag_val * np.eye(self.bp_obj.num_pow)
-            if self.mode == "ternary":
-                bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
+            if self.mode == "stage2":
+                bias_cov[0] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
 
         bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
         bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
-        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :], self.num_hyp - 1,
+
+        if self.mode in ['stage1', 'full', 'diagonal']:
+            bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :],
+                                      self.num_hyp - 1,
+                                      axis=0)
+        else:
+            bias_mean = np.repeat(bias_mean_vec[np.newaxis, :],
+                                  self.num_hyp,
                                   axis=0)
 
         return(bias_mean, bias_cov)
@@ -237,7 +246,7 @@ class bias_jackknife():
             gauss2 = multivariate_normal.logpdf(self.bp_obj.bp_draws,
                                                 mean=self.bias_prior.mean[hyp_ind],
                                                 cov=cov_sum)
-        except ValueError:
+        except (ValueError, LinAlgError):
             print(self.bias_prior.cov[hyp_ind])
             print(cov_sum)
             raise ValueError("Bad matrix. Clues printed out.")
