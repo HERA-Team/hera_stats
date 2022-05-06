@@ -46,11 +46,11 @@ class bandpower():
                              "User must either supply measured bandpowers or simulate them.")
 
         if not isinstance(num_draw, int):
-            print("Casting num_draw parameter as an integer")
+            warnings.warn("Casting num_draw parameter as an integer")
             num_samp = int(num_draw)
 
         if not isinstance(num_pow, int):
-            print("Casting num_pow parameter as an integer")
+            warnings.warn("Casting num_pow parameter as an integer")
             num_pow = int(num_pow)
 
         if "__iter__" in dir(std):
