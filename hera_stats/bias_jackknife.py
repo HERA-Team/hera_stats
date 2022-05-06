@@ -55,7 +55,7 @@ class bandpower():
 
         if "__iter__" in dir(std):
             if not isinstance(std, np.ndarray):
-                print("Casting std parameter as an array")
+                warnings.warn("Casting std parameter as an array")
                 std = np.array(std)
 
         self.num_pow = num_pow
