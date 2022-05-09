@@ -86,7 +86,7 @@ class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
                  bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
-                 hyp_prior=None, analytic=True, mode='full'):
+                 hyp_prior=None, analytic=True, mode='diagonal'):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -102,8 +102,8 @@ class bias_jackknife():
             hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
         """
-        if mode not in ['full', 'diagonal', 'stage2', 'stage1']:
-            raise ValueError("mode must be 'full', 'diagonal', 'stage2', or 'stage1'")
+        if mode not in ['full', 'diagonal', 'ternary']:
+            raise ValueError("mode must be 'full', 'diagonal', ternary")
 
         self.mode = mode
         self.bp_obj = copy.deepcopy(bp_obj)
@@ -152,8 +152,8 @@ class bias_jackknife():
             num_hyp = B[M]
         elif self.mode == 'diagonal':
             num_hyp = 2**(self.bp_obj.num_pow)
-        elif self.mode in ['stage1', 'stage2']:
-            num_hyp = 2
+        else:
+            num_hyp = 3
         return(num_hyp)
 
     def get_like(self):
@@ -199,23 +199,19 @@ class bias_jackknife():
                 else:  # Mode must be diagonal
                     bias_cov[hyp_ind, diag_on, diag_on] = diag_val
                     hyp_ind += 1
-        elif self.mode in ["stage1", "stage2"]:
+        else:
             diag_inds = np.arange(self.bp_obj.num_pow)
             bias_cov[1] = diag_val * np.eye(self.bp_obj.num_pow)
-            if self.mode == "stage2":
-                bias_cov[0] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
+            bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
 
         bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
-        bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
-
-        if self.mode in ['stage1', 'full', 'diagonal']:
-            bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :],
-                                      self.num_hyp - 1,
-                                      axis=0)
+        if "__iter__" in dir(bias_prior_mean):
+            bias_mean_vec = np.copy(bias_prior_mean)
         else:
-            bias_mean = np.repeat(bias_mean_vec[np.newaxis, :],
-                                  self.num_hyp,
-                                  axis=0)
+            bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
+
+        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :],
+                                  self.num_hyp - 1, axis=0)
 
         return(bias_mean, bias_cov)
 
