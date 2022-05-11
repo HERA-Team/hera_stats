@@ -86,7 +86,7 @@ class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
                  bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
-                 hyp_prior=None, analytic=True, mode='diagonal'):
+                 hyp_prior=None, analytic=True, mode='diagonal', dual_mean=False):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -107,7 +107,7 @@ class bias_jackknife():
 
         self.mode = mode
         self.bp_obj = copy.deepcopy(bp_obj)
-        if bias_prior_std > 1e4 * np.amin(self.bp_obj.std):
+        if np.amin(bias_prior_std) > 1e4 * np.amin(self.bp_obj.std):
             warnings.warn("Bias prior is sufficiently large compared to error"
                           " bar to produce floating point roundoff errors. The"
                           " likelihoods may be untrustworthy and this is an "
@@ -115,9 +115,9 @@ class bias_jackknife():
 
         self.bp_prior = gauss_prior(bp_prior_mean, bp_prior_std)
         self.num_hyp = self.get_num_hyp()
-        bias_prior_mean, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
-                                                                  bias_prior_std,
-                                                                  bias_prior_corr)
+        bias_prior_mean_vec, bias_prior_cov = self._get_bias_mean_cov(bias_prior_mean,
+                                                                      bias_prior_std,
+                                                                      bias_prior_corr)
         if hyp_prior is None:  # Default to flat
             self.hyp_prior = np.ones(self.num_hyp) / self.num_hyp
         elif not np.isclose(np.sum(hyp_prior), 1):
@@ -126,12 +126,21 @@ class bias_jackknife():
             raise ValueError("hyp_prior length does not match hypothesis set length. Check mode keyword.")
         else:
             self.hyp_prior = hyp_prior
-        self.bias_prior = multi_gauss_prior(bias_prior_mean, bias_prior_cov)
-
+        self.bias_prior = multi_gauss_prior(bias_prior_mean_vec, bias_prior_cov)
+        self.dual_mean = dual_mean
         self.analytic = analytic
         self.noise_cov = self._get_noise_cov()
 
         self.like = self.get_like()
+        if self.dual_mean:
+            self.dual_jk = bias_jackknife(bp_obj, bp_prior_mean=bp_prior_mean,
+                                          bp_prior_std=bp_prior_std,
+                                          bias_prior_mean=-bias_prior_mean,  # Need a minus sign here
+                                          bias_prior_std=bias_prior_std,
+                                          bias_prior_corr=bias_prior_corr,
+                                          hyp_prior=hyp_prior, analytic=analytic,
+                                          mode=mode, dual_mean=False)
+            self.like = 0.5 * self.like + 0.5 * self.dual_jk.like
         self.evid = self.get_evidence()
         self.post = self.get_post()
 
@@ -171,15 +180,18 @@ class bias_jackknife():
         return(like)
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
-
+        if not hasattr(bias_prior_mean, "__iter__"):
+            bias_prior_mean = np.repeat(bias_prior_mean, 4)
+        if not hasattr(bias_prior_std, "__iter__"):
+            bias_prior_std = np.repeat(bias_prior_std, 4)
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
+        bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
 
         ###
         # The matrices need to be transitive - this should be all of them. #
         ###
         diag_val = bias_prior_std**2
-        off_diag_val = bias_prior_corr * diag_val
         hyp_ind = 0
         if self.mode in ["full", "diagonal"]:
             for diag_on in powerset(range(self.bp_obj.num_pow)):
@@ -189,29 +201,23 @@ class bias_jackknife():
                 elif self.mode == "full":
                     parts = set_partitions(diag_on)  # Set of partitionings
                     for part in parts:  # Loop over partitionings
-                        bias_cov[hyp_ind, diag_on, diag_on] = diag_val
+                        bias_cov[hyp_ind, diag_on, diag_on] = diag_val[np.array(diag_on)]
                         for sub_part in part:  # Loop over compartments to correlate them
                             off_diags = combinations(sub_part, 2)  # Get off-diagonal indices for this compartment
                             for pair in off_diags:  # Fill off-diagonal indices for this compartment
+                                off_diag_val = bias_prior_corr * bias_prior_std[pair[0]] * bias_prior_std[pair[1]]
                                 bias_cov[hyp_ind, pair[0], pair[1]] = off_diag_val
                                 bias_cov[hyp_ind, pair[1], pair[0]] = off_diag_val
+                        bias_mean[hyp_ind, diag_on] = bias_prior_mean[np.array(diag_on)]
                         hyp_ind += 1
                 else:  # Mode must be diagonal
-                    bias_cov[hyp_ind, diag_on, diag_on] = diag_val
+                    bias_cov[hyp_ind, diag_on, diag_on] = diag_val[np.array(diag_on)]
+                    bias_mean[hyp_ind, diag_on] = bias_prior_mean[np.array(diag_on)]
                     hyp_ind += 1
         else:
             diag_inds = np.arange(self.bp_obj.num_pow)
             bias_cov[1] = diag_val * np.eye(self.bp_obj.num_pow)
-            bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + off_diag_val * np.ones(bias_cov_shape[1:])
-
-        bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
-        if "__iter__" in dir(bias_prior_mean):
-            bias_mean_vec = np.copy(bias_prior_mean)
-        else:
-            bias_mean_vec = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
-
-        bias_mean[1:] = np.repeat(bias_mean_vec[np.newaxis, :],
-                                  self.num_hyp - 1, axis=0)
+            bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + bias_prior_corr * np.outer(bias_prior_std, bias_prior_std)
 
         return(bias_mean, bias_cov)
 
@@ -223,31 +229,30 @@ class bias_jackknife():
             noise_cov = np.diag(np.repeat(self.bp_obj.std**2, self.bp_obj.num_pow))
         return(noise_cov)
 
-    def _get_mod_var_mean_cov_sum(self, hyp_ind):
+    def _get_mod_var_cov_sum_inv(self, hyp_ind):
         cov_sum = self.noise_cov + self.bias_prior.cov[hyp_ind]
         cov_sum_inv = np.linalg.inv(cov_sum)
         mod_var = 1 / np.sum(cov_sum_inv)
-        mod_mean = mod_var * np.sum((self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind]) @ cov_sum_inv, axis=1)
 
-        return(mod_var, mod_mean, cov_sum)
+        return(mod_var, cov_sum_inv)
+
+    def _get_middle_cov(self, mod_var):
+        if self.bp_prior.std == 0:
+            prec_sum = np.inf
+        else:
+            prec_sum = 1 / mod_var + 1 / self.bp_prior.std**2
+        middle_C = np.ones([self.bp_obj.num_pow, self.bp_obj.num_pow]) / prec_sum
+        return(middle_C)
 
     def _get_like_analytic(self, hyp_ind):
 
-        mod_var, mod_mean, cov_sum = self._get_mod_var_mean_cov_sum(hyp_ind)
+        mod_var, cov_sum_inv = self._get_mod_var_mean_cov_sum(hyp_ind)
+        mu_prime = self.bias_prior.mean[hyp_ind] + self.bp_prior.mean * np.ones(self.bp_obj.num_pow)
+        middle_C = self._get_middle_cov(mod_var)
 
-        # Use log to avoid dividing by 0
-        gauss1 = norm.logpdf(mod_mean, loc=self.bp_prior.mean,
-                             scale=np.sqrt(mod_var + self.bp_prior.std**2))
-        try:
-            gauss2 = multivariate_normal.logpdf(self.bp_obj.bp_draws,
-                                                mean=self.bias_prior.mean[hyp_ind],
-                                                cov=cov_sum)
-        except (ValueError, LinAlgError):
-            print(self.bias_prior.cov[hyp_ind])
-            print(cov_sum)
-            raise ValueError("Bad matrix. Clues printed out.")
-        gauss3 = norm.logpdf(mod_mean, loc=0, scale=np.sqrt(mod_var))
-        like = np.exp(gauss1 + gauss2 - gauss3)
+        cov_inv_adjust = cov_sum_inv @ middle_C @ cov_sum_inv
+        C_prime = np.linalg.inv(cov_sum_inv - cov_inv_adjust)
+        like = multivariate_normal(mean=mu_prime, cov=C_prime).pdf(self.bp_obj.bp_draws)
 
         return(like)
 
