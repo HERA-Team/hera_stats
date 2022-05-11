@@ -17,7 +17,7 @@ multi_gauss_prior = namedtuple("multi_gauss_prior", ["mean", "cov"])
 
 class bandpower():
 
-    def __init__(self, simulate=True, mean=1, std=0.5, bias=0, num_pow=4,
+    def __init__(self, simulate=True, mean=1, std=1, bias=0, num_pow=4,
                  num_draw=int(1e6), bp_meas=None):
         """
         Container for holding bandpower draws and related metadata.
@@ -169,7 +169,7 @@ class bias_jackknife():
             else:
                 like[hyp_ind] = self._get_like_num(hyp_ind)
 
-        return(like)
+        return(like, entropy)
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
         if not hasattr(bias_prior_mean, "__iter__"):
@@ -210,6 +210,8 @@ class bias_jackknife():
             diag_inds = np.arange(self.bp_obj.num_pow)
             bias_cov[1] = diag_val * np.eye(self.bp_obj.num_pow)
             bias_cov[2] = (1 - bias_prior_corr) * bias_cov[1] + bias_prior_corr * np.outer(bias_prior_std, bias_prior_std)
+            for hyp_ind in [1, 2]:
+                bias_mean[hyp_ind] = bias_prior_mean
 
         return(bias_mean, bias_cov)
 
@@ -239,7 +241,7 @@ class bias_jackknife():
     def _get_like_analytic(self, hyp_ind):
 
         mod_var, cov_sum_inv, _ = self._get_mod_var_cov_sum_inv(hyp_ind)
-        mu_prime = self.bias_prior.mean[hyp_ind] + self.bp_prior.mean * np.ones(self.bp_obj.num_pow)
+        mu_prime = self.bias_prior.mean[hyp_ind] + np.repeat(self.bp_prior.mean, self.bp_obj.num_pow)
         middle_C = self._get_middle_cov(mod_var)
 
         cov_inv_adjust = cov_sum_inv @ middle_C @ cov_sum_inv
