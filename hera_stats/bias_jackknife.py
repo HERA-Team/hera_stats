@@ -86,7 +86,7 @@ class bias_jackknife():
 
     def __init__(self, bp_obj, bp_prior_mean=1, bp_prior_std=0.5,
                  bias_prior_mean=0, bias_prior_std=10, bias_prior_corr=1,
-                 hyp_prior=None, analytic=True, mode='diagonal', dual_mean=False):
+                 hyp_prior=None, analytic=True, mode='diagonal'):
         """
         Class for containing jackknife parameters and doing calculations of
         various test statistics.
@@ -127,20 +127,11 @@ class bias_jackknife():
         else:
             self.hyp_prior = hyp_prior
         self.bias_prior = multi_gauss_prior(bias_prior_mean_vec, bias_prior_cov)
-        self.dual_mean = dual_mean
         self.analytic = analytic
         self.noise_cov = self._get_noise_cov()
 
-        self.like = self.get_like()
-        if self.dual_mean:
-            self.dual_jk = bias_jackknife(bp_obj, bp_prior_mean=bp_prior_mean,
-                                          bp_prior_std=bp_prior_std,
-                                          bias_prior_mean=-bias_prior_mean,  # Need a minus sign here
-                                          bias_prior_std=bias_prior_std,
-                                          bias_prior_corr=bias_prior_corr,
-                                          hyp_prior=hyp_prior, analytic=analytic,
-                                          mode=mode, dual_mean=False)
-            self.like = 0.5 * self.like + 0.5 * self.dual_jk.like
+        self.like, self.entropy = self.get_like()
+        self.sum_entropy = self.hyp_prior @ self.entropy
         self.evid = self.get_evidence()
         self.post = self.get_post()
 
@@ -171,9 +162,10 @@ class bias_jackknife():
         """
 
         like = np.zeros([self.num_hyp, self.bp_obj.num_draw])
+        entropy = np.zeros(self.num_hyp)
         for hyp_ind in range(self.num_hyp):
             if self.analytic:
-                like[hyp_ind] = self._get_like_analytic(hyp_ind)
+                like[hyp_ind], entropy[hyp_ind] = self._get_like_analytic(hyp_ind)
             else:
                 like[hyp_ind] = self._get_like_num(hyp_ind)
 
@@ -234,7 +226,7 @@ class bias_jackknife():
         cov_sum_inv = np.linalg.inv(cov_sum)
         mod_var = 1 / np.sum(cov_sum_inv)
 
-        return(mod_var, cov_sum_inv)
+        return(mod_var, cov_sum_inv, cov_sum)
 
     def _get_middle_cov(self, mod_var):
         if self.bp_prior.std == 0:
@@ -246,19 +238,20 @@ class bias_jackknife():
 
     def _get_like_analytic(self, hyp_ind):
 
-        mod_var, cov_sum_inv = self._get_mod_var_mean_cov_sum(hyp_ind)
+        mod_var, cov_sum_inv, _ = self._get_mod_var_cov_sum_inv(hyp_ind)
         mu_prime = self.bias_prior.mean[hyp_ind] + self.bp_prior.mean * np.ones(self.bp_obj.num_pow)
         middle_C = self._get_middle_cov(mod_var)
 
         cov_inv_adjust = cov_sum_inv @ middle_C @ cov_sum_inv
         C_prime = np.linalg.inv(cov_sum_inv - cov_inv_adjust)
         like = multivariate_normal(mean=mu_prime, cov=C_prime).pdf(self.bp_obj.bp_draws)
+        entropy = multivariate_normal(mean=mu_prime, cov=C_prime).entropy() / np.log(2)
 
-        return(like)
+        return(like, entropy)
 
     def _get_integr(self, hyp_ind):
 
-        _, _, cov_sum = self._get_mod_var_mean_cov_sum(hyp_ind)
+        _, _, cov_sum = self._get_mod_var_cov_sum_inv(hyp_ind)
 
         def integrand(x):
             gauss_1 = multivariate_normal.pdf(self.bp_obj.bp_draws - self.bias_prior.mean[hyp_ind],
