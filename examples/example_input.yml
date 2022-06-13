@@ -1,0 +1,9 @@
+source_data:
+  filename: /lustre/aoc/projects/hera/ssingh/cleaned_data/epoch_auto_P_IDR2_field1_x.uvh5
+filing:
+  outdir: "./results/hera_power_spectra_figures"
+select:
+  bls: 141, 143, 141, 143
+hdelay_val: 2000
+
+
