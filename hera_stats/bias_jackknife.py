@@ -173,9 +173,9 @@ class bias_jackknife():
 
     def _get_bias_mean_cov(self, bias_prior_mean, bias_prior_std, bias_prior_corr):
         if not hasattr(bias_prior_mean, "__iter__"):
-            bias_prior_mean = np.repeat(bias_prior_mean, 4)
+            bias_prior_mean = np.repeat(bias_prior_mean, self.bp_obj.num_pow)
         if not hasattr(bias_prior_std, "__iter__"):
-            bias_prior_std = np.repeat(bias_prior_std, 4)
+            bias_prior_std = np.repeat(bias_prior_std, self.bp_obj.num_pow)
         bias_cov_shape = [self.num_hyp, self.bp_obj.num_pow, self.bp_obj.num_pow]
         bias_cov = np.zeros(bias_cov_shape)
         bias_mean = np.zeros([self.num_hyp, self.bp_obj.num_pow])
