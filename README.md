@@ -4,22 +4,22 @@
 [![Coverage Status](https://coveralls.io/repos/github/HERA-Team/hera_stats/badge.svg?branch=master)](https://coveralls.io/github/HERA-Team/hera_stats?branch=master)
 [![Documentation](https://readthedocs.org/projects/hera-stats/badge/?version=latest)](https://readthedocs.org/projects/hera-stats/badge/?version=latest)
 
-The ``hera_stats`` module provides a collection of functions and container 
-objects to help calculate various statistics on sets of delay spectra, and 
+The ``hera_stats`` module provides a collection of functions and container
+objects to help calculate various statistics on sets of delay spectra, and
 manage splits and other aspects of null tests.
 
 For usage examples and documentation, see http://hera-stats.readthedocs.io/en/latest/.
 
 ## Installation
 Preferred method of installation for users is simply `pip install .`
-(or `pip install git+https://github.com/HERA-Team/hera_stats`). This will install 
+(or `pip install git+https://github.com/HERA-Team/hera_stats`). This will install
 required dependencies. See below for manual dependency management.
- 
-Optionally, if you want to make use of the Jupyter notebook automation features 
+
+Optionally, if you want to make use of the Jupyter notebook automation features
 in the `hera_pspec.automate` module::
 
     $ conda/pip install jupyter
-    
+
 ### Dependencies
 If you are using `conda`, you may wish to install the following dependencies manually
 to avoid them being installed automatically by `pip`::
@@ -35,9 +35,9 @@ environment. The following commands will install all relevant development packag
     $ conda create -n hera_stats python=3
     $ conda activate hera_stats
     $ conda env update -n hera_stats -f environment.yml
-    $ pip install -e . 
+    $ pip install -e .
 
-This will install extra dependencies required for testing/development as well as the 
+This will install extra dependencies required for testing/development as well as the
 standard ones.
 
 ### Running Tests
@@ -50,8 +50,9 @@ From the source `hera_stats` directory run: `nosetests`.
 * pyuvdata (`pip install pyuvdata` or use https://github.com/HERA-Team/pyuvdata.git)
 * hera_pspec (https://github.com/HERA-Team/hera_pspec.git)
 * hdf5
+* more_itertools (`pip install more-itertools`)
 
-Optionally, if you want to make use of the Jupyter notebook automation features 
+Optionally, if you want to make use of the Jupyter notebook automation features
 in the `hera_pspec.automate` module:
 * jupyter (`pip install jupyter`)
 
@@ -60,7 +61,7 @@ For anaconda users, we suggest using conda to install numpy.
 
 ## Running `hera_stats`
 
-There are some Jupyter notebooks in the [`examples/`](examples/) subdirectory 
+There are some Jupyter notebooks in the [`examples/`](examples/) subdirectory
 with examples of how to use various features of `hera_stats`.
 
 ## Features
@@ -75,3 +76,6 @@ with examples of how to use various features of `hera_stats`.
 * `shuffle`: Functions to randomly shuffle data. This includes a function to construct new visibilities by shuffling samples from a set of visibilities within the same redundant baseline group (`shuffle_data_redgrp`).
 * `split`: A range of convenience functions for splitting data in various ways.
 * `stats`: Various statistical convenience functions to compare jackknife power spectra.
+* `bias_jackknife`: Prototype to Chiborg (https://github.com/mwilensky768/chiborg.git)
+code that acts as a jackknife test for finding biased subsets within data. The
+code in this repo was used for the H1C IDR3 upper limit analysis.
