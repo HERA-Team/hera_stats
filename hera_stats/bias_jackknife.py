@@ -101,6 +101,7 @@ class bias_jackknife():
             bias_prior_corr: Correlation coefficient for bias prior in correlated hypothesis
             hyp_prior: Prior probability of each hypothesis, in the order (null, uncorrelated bias, correlated bias)
             analytic: Whether to use analytic result for likelihood computation
+            mode: Which hypothesis set to use (full, diagonal, ternary)
         """
         if mode not in ['full', 'diagonal', 'ternary']:
             raise ValueError("mode must be 'full', 'diagonal', ternary")
