@@ -3,17 +3,16 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - gcc=12.1.0
   - aipy>=3.0.0rc2
   - astropy>=2.0
   - h5py
   - matplotlib>=2.0
   - nose
-  - numpy>=1.15
+  - numpy>=1.19
   - pip
   - pyyaml
   - scikit-learn
-  - scipy
+  - scipy>=1.2.0
   - jupyter
   - six
   - coveralls
