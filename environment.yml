@@ -17,6 +17,7 @@ dependencies:
   - six
   - coveralls
   - pyuvdata
+  - more_itertools
   - pip:
     - git+https://github.com/HERA-Team/linsolve
     - git+https://github.com/HERA-Team/uvtools
