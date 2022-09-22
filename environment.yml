@@ -3,16 +3,17 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - libstdcxx-ng
   - aipy>=3.0.0rc2
   - astropy>=2.0
   - h5py
   - matplotlib>=2.0
   - nose
-  - numpy>=1.15
+  - numpy>=1.19
   - pip
   - pyyaml
   - scikit-learn
-  - scipy
+  - scipy>=1.2.0
   - jupyter
   - six
   - coveralls
@@ -24,3 +25,4 @@ dependencies:
     - git+https://github.com/HERA-Team/hera_pspec
     - pyephem
     - multiprocess
+    - more_itertools

@@ -1,7 +1,7 @@
 language: python
 python:
   # We don't actually use the Travis Python, but this keeps it organized.
-  - "3.7"
+  - "3.8"
 
 # Cache pip-installed dependencies
 cache:
@@ -30,7 +30,7 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls jupyter
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coveralls jupyter nbconvert
   - source activate test-environment
   - conda env update -n test-environment -f environment.yml
   - pip install -e .  # force it to have a GIT_INFO file in the repo directory
