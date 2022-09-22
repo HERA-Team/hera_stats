@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - libstdcxx-ng
   - aipy>=3.0.0rc2
   - astropy>=2.0
   - h5py
